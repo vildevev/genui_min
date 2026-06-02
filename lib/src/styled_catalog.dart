@@ -198,8 +198,8 @@ final CatalogItem styledStat = CatalogItem(
     final delta = data['delta']?.toString();
     final theme = Theme.of(ctx.buildContext);
     final cs = theme.colorScheme;
-    final (Color deltaColor, IconData? arrow) = switch (data['trend']
-        ?.toString()) {
+    final (Color deltaColor, IconData? arrow) =
+        switch (data['trend']?.toString()) {
       'up' => (const Color(0xFF4CAF50), Icons.arrow_upward),
       'down' => (cs.error, Icons.arrow_downward),
       _ => (cs.onSurfaceVariant, null),
@@ -268,8 +268,7 @@ void _dispatchAction(CatalogItemContext ctx, Object? action) {
 
 /// Concise A2UI rules + a worked few-shot example that keep small models on the
 /// rails (unique ids, button with its own label, one child per Card).
-const String minimalComponentRules =
-    'IMPORTANT component rules:\n'
+const String minimalComponentRules = 'IMPORTANT component rules:\n'
     '- Every component "id" MUST be unique and appear as a child of EXACTLY ONE '
     'parent. NEVER reference the same id from two parents.\n'
     '- A Button MUST have its own dedicated child Text component for its label '
@@ -295,15 +294,15 @@ const String minimalFewShotExample =
 /// Build the minimal styled catalog. [catalogId] defaults to the A2UI basic
 /// catalog id so it interops with the basic-catalog system prompt scaffolding.
 Catalog styledMinimalCatalog({String? catalogId}) => Catalog(
-  [styledText, styledCard, styledButton, styledColumn, styledStat],
-  functions: const [],
-  catalogId: catalogId ?? basicCatalogId,
-  systemPromptFragments: [
-    BasicCatalogItems.basicCatalogRules,
-    minimalComponentRules,
-    minimalFewShotExample,
-  ],
-);
+      [styledText, styledCard, styledButton, styledColumn, styledStat],
+      functions: const [],
+      catalogId: catalogId ?? basicCatalogId,
+      systemPromptFragments: [
+        BasicCatalogItems.basicCatalogRules,
+        minimalComponentRules,
+        minimalFewShotExample,
+      ],
+    );
 
 /// The joined system prompt for a given catalog (chat / create-only mode).
 String minimalSystemPrompt(Catalog catalog) =>

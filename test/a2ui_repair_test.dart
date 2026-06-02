@@ -2,9 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genui_min/genui_min.dart';
 
 Map<String, dynamic> _uc(List<Map<String, dynamic>> components) => {
-  'version': 'v0.9',
-  'updateComponents': {'surfaceId': 'main', 'components': components},
-};
+      'version': 'v0.9',
+      'updateComponents': {'surfaceId': 'main', 'components': components},
+    };
 
 List<Map<String, dynamic>> _comps(Map<String, dynamic> repaired) =>
     ((repaired['updateComponents'] as Map)['components'] as List)
@@ -35,16 +35,23 @@ void main() {
   });
 
   group('repairUpdateComponents', () {
-    test('clones a child reused by two parents (the Button-reuses-Text bug)', () {
+    test('clones a child reused by two parents (the Button-reuses-Text bug)',
+        () {
       final msg = _uc([
-        {'id': 'root', 'component': 'Column', 'children': ['card', 'btn']},
+        {
+          'id': 'root',
+          'component': 'Column',
+          'children': ['card', 'btn']
+        },
         {'id': 'card', 'component': 'Card', 'child': 'shared_text'},
         {'id': 'shared_text', 'component': 'Text', 'text': 'Glow tip'},
         {
           'id': 'btn',
           'component': 'Button',
           'child': 'shared_text', // <-- reused!
-          'action': {'event': {'name': 'x', 'context': {}}},
+          'action': {
+            'event': {'name': 'x', 'context': {}}
+          },
         },
       ]);
       final fixed = repairUpdateComponents(msg);
@@ -62,7 +69,11 @@ void main() {
 
     test('drops dangling child references', () {
       final msg = _uc([
-        {'id': 'root', 'component': 'Column', 'children': ['real', 'ghost']},
+        {
+          'id': 'root',
+          'component': 'Column',
+          'children': ['real', 'ghost']
+        },
         {'id': 'real', 'component': 'Text', 'text': 'hi'},
       ]);
       final fixed = repairUpdateComponents(msg);
@@ -71,7 +82,11 @@ void main() {
 
     test('synthesizes a label for a Button missing its child', () {
       final msg = _uc([
-        {'id': 'root', 'component': 'Column', 'children': ['btn']},
+        {
+          'id': 'root',
+          'component': 'Column',
+          'children': ['btn']
+        },
         {'id': 'btn', 'component': 'Button'},
       ]);
       final fixed = repairUpdateComponents(msg);
@@ -100,7 +115,11 @@ void main() {
 
     test('drops orphan components not reachable from root', () {
       final msg = _uc([
-        {'id': 'root', 'component': 'Column', 'children': ['a']},
+        {
+          'id': 'root',
+          'component': 'Column',
+          'children': ['a']
+        },
         {'id': 'a', 'component': 'Text', 'text': 'hi'},
         {'id': 'orphan', 'component': 'Text', 'text': 'nobody references me'},
       ]);
@@ -110,11 +129,21 @@ void main() {
 
     test('valid input passes through structurally intact', () {
       final msg = _uc([
-        {'id': 'root', 'component': 'Column', 'children': ['c', 'b']},
+        {
+          'id': 'root',
+          'component': 'Column',
+          'children': ['c', 'b']
+        },
         {'id': 'c', 'component': 'Card', 'child': 'ct'},
         {'id': 'ct', 'component': 'Text', 'text': 'tip'},
-        {'id': 'b', 'component': 'Button', 'child': 'bl',
-          'action': {'event': {'name': 'go', 'context': {}}}},
+        {
+          'id': 'b',
+          'component': 'Button',
+          'child': 'bl',
+          'action': {
+            'event': {'name': 'go', 'context': {}}
+          }
+        },
         {'id': 'bl', 'component': 'Text', 'text': 'OK'},
       ]);
       final fixed = repairUpdateComponents(msg);
@@ -128,11 +157,37 @@ void main() {
       final raw = '```json\n'
           '{"version":"v0.9","updateComponents":{"surfaceId":"main",'
           '"components":[{"id":"root","component":"Text","text":"hi"}]}}\n```';
-      final out = repairRawResponse(raw,
-          surfaceId: 'main', catalogId: 'cat://x');
+      final out =
+          repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x');
       expect(out, contains('"createSurface"'));
       expect(out, contains('"updateComponents"'));
       expect('```json'.allMatches(out).length, 2);
+    });
+
+    test('recovers from a missing brace that nests a sibling component', () {
+      // Real Gemma output: it forgot to close `cta_button`, so `cta_label`
+      // got nested inside it as a keyless object (invalid JSON). Without the
+      // brace-fixer the whole message is unparseable and nothing renders.
+      final raw = '```json\n'
+          '{"version":"v0.9","updateComponents":{"surfaceId":"main",'
+          '"components":[{"id":"root","component":"Column",'
+          '"children":["title_text","cta_button"]},'
+          '{"id":"title_text","component":"Text","text":"Hi"},'
+          '{"id":"cta_button","component":"Button","child":"cta_label",'
+          '"action":{"event":{"name":"got_it"}},'
+          '{"id":"cta_label","component":"Text","text":"Got it"}}]}}\n```';
+      final objs = extractJsonObjects(raw);
+      expect(objs, isNotEmpty, reason: 'brace-fixer should recover the object');
+      final comps = objs.first['updateComponents']['components'] as List;
+      final ids = comps.map((c) => c['id']).toList();
+      expect(
+          ids, containsAll(['root', 'title_text', 'cta_button', 'cta_label']));
+
+      // And the full pipeline renders it (button label survives).
+      final out =
+          repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x');
+      expect(out, contains('"id": "cta_button"'));
+      expect(out, contains('"id": "cta_label"'));
     });
 
     test('rewrites a model-invented surfaceId to the created surface', () {
@@ -141,8 +196,8 @@ void main() {
       final raw = '```json\n'
           '{"version":"v0.9","updateComponents":{"surfaceId":"week_summary",'
           '"components":[{"id":"root","component":"Text","text":"hi"}]}}\n```';
-      final out = repairRawResponse(raw,
-          surfaceId: 'main', catalogId: 'cat://x');
+      final out =
+          repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x');
       expect(out, contains('"surfaceId": "main"'));
       expect(out, isNot(contains('week_summary')));
     });

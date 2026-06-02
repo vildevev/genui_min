@@ -42,14 +42,14 @@ class GenuiMinApp extends StatelessWidget {
   const GenuiMinApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'genui_min',
-    theme: ThemeData(
-      colorSchemeSeed: const Color(0xFFD9B36A),
-      brightness: Brightness.dark,
-      useMaterial3: true,
-    ),
-    home: const DemoPage(),
-  );
+        title: 'genui_min',
+        theme: ThemeData(
+          colorSchemeSeed: const Color(0xFFD9B36A),
+          brightness: Brightness.dark,
+          useMaterial3: true,
+        ),
+        home: const DemoPage(),
+      );
 }
 
 class DemoPage extends StatefulWidget {
@@ -115,7 +115,8 @@ class _DemoPageState extends State<DemoPage> {
 
   Future<void> _downloadAndLoad() async {
     if (_hfToken.isEmpty) {
-      setState(() => _status = 'Pass --dart-define=HF_TOKEN=hf_xxx to download.');
+      setState(
+          () => _status = 'Pass --dart-define=HF_TOKEN=hf_xxx to download.');
       return;
     }
     setState(() {
@@ -148,8 +149,7 @@ class _DemoPageState extends State<DemoPage> {
     }
     setState(() => _busy = true);
     try {
-      final prompt =
-          '$_systemPrompt\n\nUser request: ${_input.text.trim()}\n'
+      final prompt = '$_systemPrompt\n\nUser request: ${_input.text.trim()}\n'
           'Respond with ONLY the A2UI messages described above — no prose.';
       final chat = await model.createChat(temperature: .6, topK: 40, topP: .9);
       await chat.addQueryChunk(Message.text(text: prompt, isUser: true));

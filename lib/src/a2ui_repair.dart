@@ -16,6 +16,10 @@
 //      top-level node is promoted (or all roots are wrapped in a Column).
 //   4. Required props — `Text` without `text` gets "", `Button` without
 //      `action` gets a default no-op event.
+//   5. Invented `surfaceId` — the model renames the surface, so the update
+//      targets a surface that was never created; it's pinned back to ours.
+//   6. Malformed JSON — a missing `}` that nests a sibling object (so the
+//      message won't even parse) is re-balanced before decoding.
 //
 // Pure Dart, no Flutter deps — unit-testable on the host.
 
@@ -24,6 +28,108 @@ import 'dart:convert';
 /// Extract candidate JSON objects from raw LLM text (handles ```json fences,
 /// surrounding prose, and multiple concatenated objects) by scanning for
 /// balanced top-level braces.
+Map<String, dynamic>? _tryDecodeMap(String s) {
+  try {
+    final decoded = jsonDecode(s);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Best-effort fixer for the most common small-model JSON error: a missing
+/// closing brace that nests what should be a *sibling* object (e.g. a component
+/// emitted inside the previous component instead of after it). Walks the text
+/// tracking object/array context; when an object is expecting a key but instead
+/// sees `{`, it closes that object first (the brace the model forgot) and drops
+/// the now-surplus trailing brace. Returns a re-balanced string to re-parse.
+String _relaxBraces(String s) {
+  final out = StringBuffer();
+  final stack = <String>[]; // '{' for objects, '[' for arrays
+  var inString = false, escaped = false, expectKey = false;
+  // A separator comma is held until we know what follows: a key/value/open
+  // (flush it), a close (drop it — trailing comma), or a keyless `{` (the
+  // enclosing object closes first, then the comma separates in the parent).
+  var pendingComma = false;
+  void flushComma() {
+    if (pendingComma) {
+      out.write(',');
+      pendingComma = false;
+    }
+  }
+
+  for (var i = 0; i < s.length; i++) {
+    final ch = s[i];
+    if (inString) {
+      out.write(ch);
+      if (escaped) {
+        escaped = false;
+      } else if (ch == r'\') {
+        escaped = true;
+      } else if (ch == '"') {
+        inString = false;
+      }
+      continue;
+    }
+    switch (ch) {
+      case '"':
+        flushComma();
+        expectKey = false; // a string here is the key (or a value)
+        inString = true;
+        out.write(ch);
+      case '{':
+        if (stack.isNotEmpty && stack.last == '{' && expectKey) {
+          // Keyless object: the enclosing object should have closed here,
+          // before the separator comma.
+          out.write('}');
+          stack.removeLast();
+        }
+        flushComma();
+        stack.add('{');
+        expectKey = true;
+        out.write(ch);
+      case '[':
+        flushComma();
+        stack.add('[');
+        expectKey = false;
+        out.write(ch);
+      case '}':
+        pendingComma = false; // drop a trailing comma
+        if (stack.isNotEmpty && stack.last == '{') {
+          stack.removeLast();
+          out.write(ch);
+        } // else surplus/misplaced — drop it
+        expectKey = false;
+      case ']':
+        pendingComma = false; // drop a trailing comma
+        if (stack.isNotEmpty && stack.last == '[') {
+          stack.removeLast();
+          out.write(ch);
+        } // else drop
+        expectKey = false;
+      case ':':
+        flushComma();
+        expectKey = false;
+        out.write(ch);
+      case ',':
+        pendingComma = true;
+        expectKey = stack.isNotEmpty && stack.last == '{';
+      case ' ':
+      case '\t':
+      case '\n':
+      case '\r':
+        out.write(ch);
+      default:
+        flushComma();
+        out.write(ch);
+    }
+  }
+  while (stack.isNotEmpty) {
+    out.write(stack.removeLast() == '{' ? '}' : ']');
+  }
+  return out.toString();
+}
+
 List<Map<String, dynamic>> extractJsonObjects(String raw) {
   final out = <Map<String, dynamic>>[];
   var depth = 0;
@@ -51,12 +157,11 @@ List<Map<String, dynamic>> extractJsonObjects(String raw) {
       depth--;
       if (depth == 0 && start >= 0) {
         final slice = raw.substring(start, i + 1);
-        try {
-          final decoded = jsonDecode(slice);
-          if (decoded is Map<String, dynamic>) out.add(decoded);
-        } catch (_) {
-          // Not valid JSON — skip this slice.
-        }
+        Map<String, dynamic>? decoded = _tryDecodeMap(slice);
+        // Tolerate the common small-model brace error (a missing `}` that nests
+        // what should be a sibling object) by re-balancing and retrying.
+        decoded ??= _tryDecodeMap(_relaxBraces(slice));
+        if (decoded != null) out.add(decoded);
         start = -1;
       }
     }
@@ -287,6 +392,7 @@ String repairRawResponse(
   }
 
   return out
-      .map((m) => '```json\n${const JsonEncoder.withIndent('  ').convert(m)}\n```')
+      .map((m) =>
+          '```json\n${const JsonEncoder.withIndent('  ').convert(m)}\n```')
       .join('\n');
 }
