@@ -3,8 +3,8 @@ description: >-
   Drive Google's genui / A2UI renderer with a small on-device LLM: a minimal
   styled component catalog plus a deterministic repair pass for small-model output.
 version: 0.1.0
-repository: https://github.com/your-org/genui_min
-issue_tracker: https://github.com/your-org/genui_min/issues
+repository: https://github.com/vildevev/genui_min
+issue_tracker: https://github.com/vildevev/genui_min/issues
 
 environment:
   sdk: ^3.5.0
