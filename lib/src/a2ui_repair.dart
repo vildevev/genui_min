@@ -18,8 +18,8 @@
 //      `action` gets a default no-op event.
 //   5. Invented `surfaceId` — the model renames the surface, so the update
 //      targets a surface that was never created; it's pinned back to ours.
-//   6. Malformed JSON — a missing `}` that nests a sibling object (so the
-//      message won't even parse) is re-balanced before decoding.
+//   6. Malformed JSON — a missing `}` that nests a sibling object, or a
+//      missing comma between elements (`}{`), is repaired before decoding.
 //
 // Pure Dart, no Flutter deps — unit-testable on the host.
 
@@ -46,16 +46,24 @@ Map<String, dynamic>? _tryDecodeMap(String s) {
 String _relaxBraces(String s) {
   final out = StringBuffer();
   final stack = <String>[]; // '{' for objects, '[' for arrays
-  var inString = false, escaped = false, expectKey = false;
-  // A separator comma is held until we know what follows: a key/value/open
-  // (flush it), a close (drop it — trailing comma), or a keyless `{` (the
-  // enclosing object closes first, then the comma separates in the parent).
+  var inString = false, escaped = false, expectKey = false, strIsKey = false;
+  // A separator comma the model wrote, held until we know what follows.
   var pendingComma = false;
-  void flushComma() {
+  // True right after a completed value or closed container — the next
+  // value/key/element must be separated by a comma. If the model forgot it
+  // (e.g. `}{` between array elements), we insert one.
+  var afterValue = false;
+
+  // Emit the separator before a new value/key/element: flush a held comma, or
+  // insert a missing one.
+  void sep() {
     if (pendingComma) {
       out.write(',');
       pendingComma = false;
+    } else if (afterValue) {
+      out.write(',');
     }
+    afterValue = false;
   }
 
   for (var i = 0; i < s.length; i++) {
@@ -68,28 +76,29 @@ String _relaxBraces(String s) {
         escaped = true;
       } else if (ch == '"') {
         inString = false;
+        afterValue = !strIsKey; // a value string completes a value
       }
       continue;
     }
     switch (ch) {
       case '"':
-        flushComma();
-        expectKey = false; // a string here is the key (or a value)
+        sep();
+        strIsKey = expectKey; // a string in key position is a key, not a value
+        expectKey = false;
         inString = true;
         out.write(ch);
       case '{':
         if (stack.isNotEmpty && stack.last == '{' && expectKey) {
-          // Keyless object: the enclosing object should have closed here,
-          // before the separator comma.
+          // Keyless object: the enclosing object should have closed here.
           out.write('}');
           stack.removeLast();
         }
-        flushComma();
+        sep();
         stack.add('{');
         expectKey = true;
         out.write(ch);
       case '[':
-        flushComma();
+        sep();
         stack.add('[');
         expectKey = false;
         out.write(ch);
@@ -100,6 +109,7 @@ String _relaxBraces(String s) {
           out.write(ch);
         } // else surplus/misplaced — drop it
         expectKey = false;
+        afterValue = true;
       case ']':
         pendingComma = false; // drop a trailing comma
         if (stack.isNotEmpty && stack.last == '[') {
@@ -107,12 +117,15 @@ String _relaxBraces(String s) {
           out.write(ch);
         } // else drop
         expectKey = false;
+        afterValue = true;
       case ':':
-        flushComma();
+        pendingComma = false;
         expectKey = false;
+        afterValue = false;
         out.write(ch);
       case ',':
         pendingComma = true;
+        afterValue = false;
         expectKey = stack.isNotEmpty && stack.last == '{';
       case ' ':
       case '\t':
@@ -120,8 +133,11 @@ String _relaxBraces(String s) {
       case '\r':
         out.write(ch);
       default:
-        flushComma();
+        // A bare literal (number / true / false / null). Only the FIRST char
+        // starts a new value (may need a separator); the rest continue it.
+        if (!afterValue) sep();
         out.write(ch);
+        afterValue = true;
     }
   }
   while (stack.isNotEmpty) {

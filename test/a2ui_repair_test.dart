@@ -190,6 +190,24 @@ void main() {
       expect(out, contains('"id": "cta_label"'));
     });
 
+    test('recovers from missing commas between array elements', () {
+      // Real Gemma output: dropped the comma between two component objects
+      // (`}` directly followed by `{`), which makes the whole message
+      // unparseable → empty surface. The fixer inserts the missing separators.
+      final raw = '```json\n'
+          '{"version":"v0.9","updateComponents":{"surfaceId":"journey_surface",'
+          '"components":[\n'
+          '{"id":"root","component":"Column","children":["a","b"]}\n' // no comma
+          '{"id":"a","component":"Text","text":"hi"},\n'
+          '{"id":"b","component":"Stat","value":"10","label":"Glow score"}\n'
+          ']}}\n```';
+      final objs = extractJsonObjects(raw);
+      expect(objs, isNotEmpty, reason: 'missing-comma fixer should recover it');
+      final comps = objs.first['updateComponents']['components'] as List;
+      expect(comps.map((c) => c['id']), containsAll(['root', 'a', 'b']));
+      expect(comps.firstWhere((c) => c['id'] == 'b')['value'], '10');
+    });
+
     test('rewrites a model-invented surfaceId to the created surface', () {
       // The model targets a surface it made up ("week_summary"); without the
       // fix the components mount on a surface that was never created.
