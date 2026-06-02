@@ -1,0 +1,14 @@
+genui_min
+Copyright (c) 2026 Vilde Vevatne
+
+This product is licensed under the MIT License (see LICENSE).
+
+It builds on and is intended to be used with the following third-party work:
+
+- `genui` (https://pub.dev/packages/genui)
+  © The Flutter Authors, licensed under BSD-3-Clause.
+
+- The A2UI protocol (https://a2ui.org).
+
+These remain the property of their respective owners and are governed by their
+own licenses.
