@@ -165,6 +165,92 @@ final CatalogItem styledColumn = CatalogItem(
   },
 );
 
+/// A `Stat` — a single metric readout: a large value, a caption label, and an
+/// optional delta chip (`trend` up = positive/green, down = negative, flat =
+/// neutral). Compose several inside a Column for a small dashboard.
+final CatalogItem styledStat = CatalogItem(
+  name: 'Stat',
+  dataSchema: jsb.S.object(
+    description: 'A single metric readout: a large value, a short caption '
+        'label, and an optional change indicator. Use this for any number or '
+        'metric instead of a plain Text.',
+    properties: {
+      'value': jsb.S.string(
+        description: 'The metric value, e.g. "66", "90%", "5 days".',
+      ),
+      'label': jsb.S.string(
+        description: 'A short caption under the value, e.g. "Glow score".',
+      ),
+      'delta': jsb.S.string(
+        description: 'Optional change text, e.g. "+4" or "up 6%".',
+      ),
+      'trend': jsb.S.string(
+        description: 'Direction of the change, drives color and arrow.',
+        enumValues: ['up', 'down', 'flat'],
+      ),
+    },
+    required: ['value'],
+  ),
+  widgetBuilder: (ctx) {
+    final data = ctx.data as JsonMap;
+    final value = (data['value'] ?? '').toString();
+    final label = data['label']?.toString();
+    final delta = data['delta']?.toString();
+    final theme = Theme.of(ctx.buildContext);
+    final cs = theme.colorScheme;
+    final (Color deltaColor, IconData? arrow) = switch (data['trend']
+        ?.toString()) {
+      'up' => (const Color(0xFF4CAF50), Icons.arrow_upward),
+      'down' => (cs.error, Icons.arrow_downward),
+      _ => (cs.onSurfaceVariant, null),
+    };
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            height: 1.0,
+            color: cs.primary,
+          ),
+        ),
+        if (label != null && label.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+          ),
+        ],
+        if (delta != null && delta.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (arrow != null) ...[
+                Icon(arrow, size: 14, color: deltaColor),
+                const SizedBox(width: 2),
+              ],
+              Text(
+                delta,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: deltaColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  },
+);
+
 void _dispatchAction(CatalogItemContext ctx, Object? action) {
   if (action is! Map) return;
   final event = action['event'];
@@ -188,7 +274,9 @@ const String minimalComponentRules =
     'parent. NEVER reference the same id from two parents.\n'
     '- A Button MUST have its own dedicated child Text component for its label '
     '(create a new Text; do not reuse another component as the button\'s child).\n'
-    '- A Card wraps ONE child (use a Column as that child for multiple things).';
+    '- A Card wraps ONE child (use a Column as that child for multiple things).\n'
+    '- For any single number or metric (a score, a streak, a percentage), use a '
+    'Stat (value + label) rather than a plain Text.';
 
 const String minimalFewShotExample =
     'COMPLETE EXAMPLE of a card with a title and a button:\n'
@@ -207,7 +295,7 @@ const String minimalFewShotExample =
 /// Build the minimal styled catalog. [catalogId] defaults to the A2UI basic
 /// catalog id so it interops with the basic-catalog system prompt scaffolding.
 Catalog styledMinimalCatalog({String? catalogId}) => Catalog(
-  [styledText, styledCard, styledButton, styledColumn],
+  [styledText, styledCard, styledButton, styledColumn, styledStat],
   functions: const [],
   catalogId: catalogId ?? basicCatalogId,
   systemPromptFragments: [

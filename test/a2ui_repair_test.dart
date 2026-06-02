@@ -134,5 +134,17 @@ void main() {
       expect(out, contains('"updateComponents"'));
       expect('```json'.allMatches(out).length, 2);
     });
+
+    test('rewrites a model-invented surfaceId to the created surface', () {
+      // The model targets a surface it made up ("week_summary"); without the
+      // fix the components mount on a surface that was never created.
+      final raw = '```json\n'
+          '{"version":"v0.9","updateComponents":{"surfaceId":"week_summary",'
+          '"components":[{"id":"root","component":"Text","text":"hi"}]}}\n```';
+      final out = repairRawResponse(raw,
+          surfaceId: 'main', catalogId: 'cat://x');
+      expect(out, contains('"surfaceId": "main"'));
+      expect(out, isNot(contains('week_summary')));
+    });
   });
 }

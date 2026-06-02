@@ -268,7 +268,19 @@ String repairRawResponse(
   }
   for (final m in msgs) {
     if (m.containsKey('updateComponents')) {
-      out.add(repairUpdateComponents(m));
+      final repaired = repairUpdateComponents(m);
+      // Small models freely invent their own surfaceId (e.g. "week_summary"),
+      // so the components target a surface that was never created and nothing
+      // mounts. Force every update onto the surface we actually created.
+      final uc = repaired['updateComponents'];
+      if (uc is Map) uc['surfaceId'] = surfaceId;
+      out.add(repaired);
+    } else if (m.containsKey('createSurface')) {
+      // Likewise pin a model-emitted createSurface to our surface + catalog.
+      final cs = Map<String, dynamic>.from(m['createSurface'] as Map);
+      cs['surfaceId'] = surfaceId;
+      cs['catalogId'] = catalogId;
+      out.add({...m, 'createSurface': cs});
     } else {
       out.add(m);
     }
