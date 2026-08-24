@@ -1,0 +1,6 @@
+```json
+{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
+{"id":"root","component":"Column","children":["real","ghost"]},
+{"id":"real","component":"Text","text":"Visible"}
+]}}
+```

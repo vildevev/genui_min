@@ -36,6 +36,14 @@ const _sampleRaw = '''
 ```
 ''';
 
+const _promptGallery = [
+  'A card titled "Glow tip" with one short sentence and a button.',
+  'A weekly habit summary card with a big percentage stat and a button.',
+  'A shopping list action card with three short lines and a "Plan dinner" button.',
+  'A matchday watch party card with kickoff time, neighborhood, and an RSVP button.',
+  'A progress metric card with a large score, supportive copy, and a next-step button.',
+];
+
 void main() => runApp(const GenuiMinApp());
 
 class GenuiMinApp extends StatelessWidget {
@@ -116,7 +124,8 @@ class _DemoPageState extends State<DemoPage> {
   Future<void> _downloadAndLoad() async {
     if (_hfToken.isEmpty) {
       setState(
-          () => _status = 'Pass --dart-define=HF_TOKEN=hf_xxx to download.');
+        () => _status = 'Pass --dart-define=HF_TOKEN=hf_xxx to download.',
+      );
       return;
     }
     setState(() {
@@ -193,15 +202,33 @@ class _DemoPageState extends State<DemoPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                for (final prompt in _promptGallery)
+                  ActionChip(
+                    label: Text(prompt),
+                    onPressed: _busy
+                        ? null
+                        : () {
+                            setState(() => _input.text = prompt);
+                          },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
                 FilledButton.tonal(
                   onPressed: _busy ? null : () => _render(_sampleRaw),
                   child: const Text('Use sample output'),
                 ),
                 OutlinedButton(
                   onPressed: _busy ? null : _downloadAndLoad,
-                  child: Text(_progress > 0 && _progress < 100
-                      ? 'Downloading $_progress%'
-                      : 'Download model'),
+                  child: Text(
+                    _progress > 0 && _progress < 100
+                        ? 'Downloading $_progress%'
+                        : 'Download model',
+                  ),
                 ),
                 FilledButton(
                   onPressed: (_busy || _model == null) ? null : _generate,
@@ -241,8 +268,10 @@ class _DemoPageState extends State<DemoPage> {
             const Text('RAW MODEL OUTPUT', style: _label),
             const SizedBox(height: 8),
             if (_error != null)
-              Text('Error: $_error',
-                  style: const TextStyle(color: Colors.redAccent)),
+              Text(
+                'Error: $_error',
+                style: const TextStyle(color: Colors.redAccent),
+              ),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),

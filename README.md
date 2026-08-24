@@ -24,6 +24,9 @@ Generated **on an iPhone, offline**: Gemma emits A2UI, `genui_min` repairs it, a
 
 > Same pipeline, two different prompts + data — each yields a structured, themed card with a metric, prose, and an action. No cloud, no API key.
 
+See [`doc/proof.md`](doc/proof.md) for the tested device/model setup, prompt
+budget notes, screenshots, and the small-model failure modes covered by tests.
+
 ---
 
 ## Why this isn't trivial
@@ -72,6 +75,9 @@ cd example && flutter pub get
 flutter run --dart-define=HF_TOKEN=hf_xxx   # or just tap "Use sample output"
 ```
 
+For a tighter runtime integration checklist, see
+[`doc/flutter_gemma.md`](doc/flutter_gemma.md).
+
 ---
 
 ## How it works
@@ -100,7 +106,7 @@ genui builds the system prompt from the JSON schema of **every** widget in the c
 
 ```yaml
 dependencies:
-  genui_min: ^0.1.0
+  genui_min: ^0.1.1
   genui: ^0.9.0
 ```
 

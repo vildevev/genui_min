@@ -408,7 +408,8 @@ String repairRawResponse(
   }
 
   return out
-      .map((m) =>
-          '```json\n${const JsonEncoder.withIndent('  ').convert(m)}\n```')
+      .map(
+        (m) => '```json\n${const JsonEncoder.withIndent('  ').convert(m)}\n```',
+      )
       .join('\n');
 }

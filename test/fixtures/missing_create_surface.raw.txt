@@ -1,0 +1,5 @@
+```json
+{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
+{"id":"root","component":"Text","text":"Created by repair"}
+]}}
+```

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genui_min/genui_min.dart';
 
@@ -35,44 +37,46 @@ void main() {
   });
 
   group('repairUpdateComponents', () {
-    test('clones a child reused by two parents (the Button-reuses-Text bug)',
-        () {
-      final msg = _uc([
-        {
-          'id': 'root',
-          'component': 'Column',
-          'children': ['card', 'btn']
-        },
-        {'id': 'card', 'component': 'Card', 'child': 'shared_text'},
-        {'id': 'shared_text', 'component': 'Text', 'text': 'Glow tip'},
-        {
-          'id': 'btn',
-          'component': 'Button',
-          'child': 'shared_text', // <-- reused!
-          'action': {
-            'event': {'name': 'x', 'context': {}}
+    test(
+      'clones a child reused by two parents (the Button-reuses-Text bug)',
+      () {
+        final msg = _uc([
+          {
+            'id': 'root',
+            'component': 'Column',
+            'children': ['card', 'btn'],
           },
-        },
-      ]);
-      final fixed = repairUpdateComponents(msg);
-      final card = _byId(fixed, 'card');
-      final btn = _byId(fixed, 'btn');
-      // Each parent now points at a DIFFERENT child id.
-      expect(card['child'], isNot(equals(btn['child'])));
-      // Both children exist and are Text with the same content.
-      final cardChild = _byId(fixed, card['child'] as String);
-      final btnChild = _byId(fixed, btn['child'] as String);
-      expect(cardChild['component'], 'Text');
-      expect(btnChild['component'], 'Text');
-      expect(cardChild['text'], 'Glow tip');
-    });
+          {'id': 'card', 'component': 'Card', 'child': 'shared_text'},
+          {'id': 'shared_text', 'component': 'Text', 'text': 'Glow tip'},
+          {
+            'id': 'btn',
+            'component': 'Button',
+            'child': 'shared_text', // <-- reused!
+            'action': {
+              'event': {'name': 'x', 'context': {}},
+            },
+          },
+        ]);
+        final fixed = repairUpdateComponents(msg);
+        final card = _byId(fixed, 'card');
+        final btn = _byId(fixed, 'btn');
+        // Each parent now points at a DIFFERENT child id.
+        expect(card['child'], isNot(equals(btn['child'])));
+        // Both children exist and are Text with the same content.
+        final cardChild = _byId(fixed, card['child'] as String);
+        final btnChild = _byId(fixed, btn['child'] as String);
+        expect(cardChild['component'], 'Text');
+        expect(btnChild['component'], 'Text');
+        expect(cardChild['text'], 'Glow tip');
+      },
+    );
 
     test('drops dangling child references', () {
       final msg = _uc([
         {
           'id': 'root',
           'component': 'Column',
-          'children': ['real', 'ghost']
+          'children': ['real', 'ghost'],
         },
         {'id': 'real', 'component': 'Text', 'text': 'hi'},
       ]);
@@ -85,7 +89,7 @@ void main() {
         {
           'id': 'root',
           'component': 'Column',
-          'children': ['btn']
+          'children': ['btn'],
         },
         {'id': 'btn', 'component': 'Button'},
       ]);
@@ -118,7 +122,7 @@ void main() {
         {
           'id': 'root',
           'component': 'Column',
-          'children': ['a']
+          'children': ['a'],
         },
         {'id': 'a', 'component': 'Text', 'text': 'hi'},
         {'id': 'orphan', 'component': 'Text', 'text': 'nobody references me'},
@@ -132,7 +136,7 @@ void main() {
         {
           'id': 'root',
           'component': 'Column',
-          'children': ['c', 'b']
+          'children': ['c', 'b'],
         },
         {'id': 'c', 'component': 'Card', 'child': 'ct'},
         {'id': 'ct', 'component': 'Text', 'text': 'tip'},
@@ -141,8 +145,8 @@ void main() {
           'component': 'Button',
           'child': 'bl',
           'action': {
-            'event': {'name': 'go', 'context': {}}
-          }
+            'event': {'name': 'go', 'context': {}},
+          },
         },
         {'id': 'bl', 'component': 'Text', 'text': 'OK'},
       ]);
@@ -157,8 +161,11 @@ void main() {
       final raw = '```json\n'
           '{"version":"v0.9","updateComponents":{"surfaceId":"main",'
           '"components":[{"id":"root","component":"Text","text":"hi"}]}}\n```';
-      final out =
-          repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x');
+      final out = repairRawResponse(
+        raw,
+        surfaceId: 'main',
+        catalogId: 'cat://x',
+      );
       expect(out, contains('"createSurface"'));
       expect(out, contains('"updateComponents"'));
       expect('```json'.allMatches(out).length, 2);
@@ -181,11 +188,16 @@ void main() {
       final comps = objs.first['updateComponents']['components'] as List;
       final ids = comps.map((c) => c['id']).toList();
       expect(
-          ids, containsAll(['root', 'title_text', 'cta_button', 'cta_label']));
+        ids,
+        containsAll(['root', 'title_text', 'cta_button', 'cta_label']),
+      );
 
       // And the full pipeline renders it (button label survives).
-      final out =
-          repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x');
+      final out = repairRawResponse(
+        raw,
+        surfaceId: 'main',
+        catalogId: 'cat://x',
+      );
       expect(out, contains('"id": "cta_button"'));
       expect(out, contains('"id": "cta_label"'));
     });
@@ -214,10 +226,43 @@ void main() {
       final raw = '```json\n'
           '{"version":"v0.9","updateComponents":{"surfaceId":"week_summary",'
           '"components":[{"id":"root","component":"Text","text":"hi"}]}}\n```';
-      final out =
-          repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x');
+      final out = repairRawResponse(
+        raw,
+        surfaceId: 'main',
+        catalogId: 'cat://x',
+      );
       expect(out, contains('"surfaceId": "main"'));
       expect(out, isNot(contains('week_summary')));
+    });
+
+    test('repairs the documented fixture failure modes', () {
+      final fixtures = Directory('test/fixtures')
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.raw.txt'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+
+      expect(fixtures, hasLength(5));
+
+      for (final fixture in fixtures) {
+        final out = repairRawResponse(
+          fixture.readAsStringSync(),
+          surfaceId: 'main',
+          catalogId: 'cat://fixture',
+        );
+
+        expect(out, contains('"createSurface"'), reason: fixture.path);
+        expect(out, contains('"updateComponents"'), reason: fixture.path);
+        expect(out, contains('"surfaceId": "main"'), reason: fixture.path);
+
+        final repaired = extractJsonObjects(
+          out,
+        ).firstWhere((msg) => msg.containsKey('updateComponents'));
+        final components = _comps(repaired);
+        expect(components, isNotEmpty, reason: fixture.path);
+        expect(components.first['id'], 'root', reason: fixture.path);
+      }
     });
   });
 }

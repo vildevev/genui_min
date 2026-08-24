@@ -1,0 +1,6 @@
+```json
+{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
+{"id":"root","component":"Column","children":["cta"]},
+{"id":"cta","component":"Button","action":{"event":{"name":"continue","context":{}}}}
+]}}
+```

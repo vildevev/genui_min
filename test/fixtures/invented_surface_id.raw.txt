@@ -1,0 +1,6 @@
+```json
+{"version":"v0.9","updateComponents":{"surfaceId":"week_summary","components":[
+{"id":"root","component":"Card","child":"title"},
+{"id":"title","component":"Text","variant":"title","text":"Weekly brief"}
+]}}
+```
