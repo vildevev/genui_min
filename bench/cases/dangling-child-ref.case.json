@@ -1,0 +1,7 @@
+{
+  "name": "dangling-child-ref",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A shopping list action card with three short lines and a \"Plan dinner\" button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"real\",\"ghost\"]},\n{\"id\":\"real\",\"component\":\"Text\",\"text\":\"Visible\"}\n]}}\n```\n"
+}

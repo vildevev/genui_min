@@ -1,0 +1,7 @@
+{
+  "name": "clean-control",
+  "model": "ideal",
+  "provenance": "synthesized",
+  "prompt": "A card titled \"Glow tip\" with one short sentence and a button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"info_card\",\"cta_button\"]},\n{\"id\":\"info_card\",\"component\":\"Card\",\"child\":\"card_text\"},\n{\"id\":\"card_text\",\"component\":\"Text\",\"text\":\"Drink water before coffee.\"},\n{\"id\":\"cta_button\",\"component\":\"Button\",\"child\":\"cta_label\",\"action\":{\"event\":{\"name\":\"cta_clicked\",\"context\":{}}}},\n{\"id\":\"cta_label\",\"component\":\"Text\",\"text\":\"Got it\"}\n]}}\n```\n"
+}

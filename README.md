@@ -68,11 +68,15 @@ final clean = repairRawResponse(raw,
 //    genui's `Surface` widget. (See gotcha #1.)
 ```
 
-Full working app in [`example/`](example/) — including a **zero-setup "sample output" mode** that renders a canned response (with a deliberate small-model bug) so you can watch the repair work without downloading a model.
+Full working app in [`example/`](example/) — three interchangeable backends
+(on-device Gemma via `flutter_gemma`, a local Ollama server, and a
+zero-setup "sample output" mode that renders a canned response with a
+deliberate small-model bug), plus a visible repair log after every render.
 
 ```bash
 cd example && flutter pub get
-flutter run --dart-define=HF_TOKEN=hf_xxx   # or just tap "Use sample output"
+flutter run --dart-define=HF_TOKEN=hf_xxx   # on-device Gemma
+flutter run                                  # or just tap "Use sample output"
 ```
 
 For a tighter runtime integration checklist, see
@@ -95,6 +99,17 @@ genui builds the system prompt from the JSON schema of **every** widget in the c
 - **Required props** → `Text` without `text` gets `""`, `Button` without `action` gets a no-op event.
 - Orphans (unreachable from `root`) are dropped.
 
+Pass a `RepairLog` and you get back exactly **which** repairs fired (`tree:clonedReusedChild×2, …`) — per-response telemetry that also powers the bench.
+
+### The bench: a corpus + scorer for small-model A2UI
+`dart run tool/bench.dart` scores a corpus of raw model outputs (`bench/cases/`) — *"would it render?"* plus the per-rule repair fingerprint — so models can be compared and repair regressions can't land silently. Contributing a captured output from *your* model is the easiest meaningful PR. See [`doc/bench.md`](doc/bench.md).
+
+### Constrained decoding: invalid A2UI, prevented at the source
+`updateComponentsOutputSchema(catalog)` derives a JSON Schema from the same catalog that builds the prompt — hand it to Ollama's structured outputs (`OllamaRunner` + `responseFormat`) and the model *cannot* emit invalid A2UI. `updateComponentsGbnf(catalog)` does the same for llama.cpp-family samplers. Verified live: qwen3:4b unconstrained produced undecodable JSON; with the schema, a perfect tree and zero repairs. See [`doc/constrained.md`](doc/constrained.md).
+
+### Bring any runner
+The pipeline needs any source of text: `LlmRunner` is the one-method contract. On-device via `flutter_gemma` (see the example app's ~15-line adapter), or over a local `ollama serve` via `OllamaRunner` (`package:genui_min/ollama.dart`) — the laptop path with no phone required.
+
 ### Three gotchas (learned the hard way)
 1. **Rebuild the genui transport every turn.** `A2uiTransportAdapter.flush()` permanently *closes* its input stream — reuse throws `Bad state: Cannot add event after closing`. Make a fresh `SurfaceController` + `A2uiTransportAdapter` + `Conversation` per generation.
 2. **The app creates the surface; the model just fills it.** Small models reliably emit `updateComponents` but skip the `createSurface` bootstrap — `repairRawResponse` injects it for you.
@@ -106,7 +121,7 @@ genui builds the system prompt from the JSON schema of **every** widget in the c
 
 ```yaml
 dependencies:
-  genui_min: ^0.1.1
+  genui_min: ^0.2.0
   genui: ^0.9.0
 ```
 

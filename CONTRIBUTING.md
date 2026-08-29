@@ -27,6 +27,7 @@ Please make sure these pass locally — CI runs the same checks:
 flutter analyze
 flutter test
 dart format --set-exit-if-changed .
+dart run tool/bench.dart
 ```
 
 ## Guidelines
@@ -36,7 +37,9 @@ dart format --set-exit-if-changed .
 - **Keep the repair pass deterministic.** No network calls, no model calls — it
   exists to fix small-model output cheaply and predictably.
 - **Add a test.** Repair-pass behavior changes should come with a case in
-  `test/a2ui_repair_test.dart`.
+  `test/a2ui_repair_test.dart` — or better, a corpus case in `bench/cases/`
+  (see `doc/bench.md`); captured raw model outputs are the best regression
+  fixtures.
 - **Match the existing style.** Run `dart format` and follow the surrounding code.
 
 ## Reporting issues

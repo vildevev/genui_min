@@ -1,0 +1,7 @@
+{
+  "name": "missing-button-label",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A card with a continue button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"cta\"]},\n{\"id\":\"cta\",\"component\":\"Button\",\"action\":{\"event\":{\"name\":\"continue\",\"context\":{}}}}\n]}}\n```\n"
+}

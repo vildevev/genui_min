@@ -1,0 +1,7 @@
+{
+  "name": "missing-create-surface",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A card with a single welcome text.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Text\",\"text\":\"Created by repair\"}\n]}}\n```\n"
+}

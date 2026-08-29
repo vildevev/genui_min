@@ -1,0 +1,7 @@
+{
+  "name": "missing-commas-between-elements",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "captured",
+  "prompt": "A progress metric card with a large score and supportive copy.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"journey_surface\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"a\",\"b\"]}\n{\"id\":\"a\",\"component\":\"Text\",\"text\":\"hi\"},\n{\"id\":\"b\",\"component\":\"Stat\",\"value\":\"10\",\"label\":\"Glow score\"}\n]}}\n```"
+}

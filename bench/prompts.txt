@@ -1,0 +1,11 @@
+# Prompt gallery for capturing new bench cases (one per line, # = comment).
+# Run a prompt through your model with the minimal system prompt, then save the
+# RAW response as bench/cases/<slug>.case.json — see doc/bench.md.
+A card titled "Glow tip" with one short sentence and a button.
+A weekly habit summary card with a big percentage stat and a button.
+A shopping list action card with three short lines and a "Plan dinner" button.
+A matchday watch party card with kickoff time, neighborhood, and an RSVP button.
+A progress metric card with a large score, supportive copy, and a next-step button.
+A streak reminder card with the current streak as a big number and a "Keep going" button.
+A hydration card showing today's water intake as a percentage stat and a log button.
+A "week in review" card with two stats side by side and a share button.

@@ -1,0 +1,7 @@
+{
+  "name": "reused-child-ref",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A card titled \"Glow tip\" with one short sentence and a button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"card\",\"button\"]},\n{\"id\":\"card\",\"component\":\"Card\",\"child\":\"shared_text\"},\n{\"id\":\"shared_text\",\"component\":\"Text\",\"text\":\"Glow tip\"},\n{\"id\":\"button\",\"component\":\"Button\",\"child\":\"shared_text\",\"action\":{\"event\":{\"name\":\"more\",\"context\":{}}}}\n]}}\n```\n"
+}

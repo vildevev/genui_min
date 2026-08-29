@@ -1,0 +1,8 @@
+{
+  "name": "stray-quote-before-object",
+  "model": "qwen3:4b",
+  "provenance": "captured",
+  "expectedFail": true,
+  "prompt": "A weekly habit summary card with a big percentage stat and a button.",
+  "raw": "{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"stat_card\",\"cta_button\"]},{\"id\":\"stat_card\",\"component\":\"Card\",\"child\":\"stat\"},{\"id\":\"stat\",\"component\":\"Stat\",\"value\":\"75%\",\"label\":\"Weekly\",\"delta\":\"+5%\",\"trend\":\"up\"},{\"id\":\"cta_button\",\"component\":\"Button\",\"child\":\"cta_label\",\"action\":{\"event\":{\"name\":\"cta_clicked\",\"context\":{}}}},\"{\"id\":\"cta_label\",\"component\":\"Text\",\"text\":\"View Details\"}]}}"
+}

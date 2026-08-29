@@ -28,6 +28,9 @@ jobs:
       - name: Test package
         run: flutter test
 
+      - name: Score the bench corpus
+        run: dart run tool/bench.dart
+
       - name: Install example dependencies
         working-directory: example
         run: flutter pub get

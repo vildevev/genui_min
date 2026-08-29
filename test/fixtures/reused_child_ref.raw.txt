@@ -1,8 +1,0 @@
-```json
-{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
-{"id":"root","component":"Column","children":["card","button"]},
-{"id":"card","component":"Card","child":"shared_text"},
-{"id":"shared_text","component":"Text","text":"Glow tip"},
-{"id":"button","component":"Button","child":"shared_text","action":{"event":{"name":"more","context":{}}}}
-]}}
-```

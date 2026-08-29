@@ -25,6 +25,97 @@
 
 import 'dart:convert';
 
+/// Stable identifiers for every repair rule, used by [RepairLog] telemetry and
+/// the bench corpus scoring so counts can be compared across runs/models.
+abstract final class RepairRules {
+  /// `createSurface` was missing from the response and got injected.
+  static const injectedCreateSurface = 'inject:createSurface';
+
+  /// JSON recovered by re-balancing a missing brace/comma before decoding.
+  static const rebalancedBraces = 'json:rebalancedBraces';
+
+  /// A top-level `{…}` slice that no repair could decode — dropped.
+  static const droppedUndecodableObject = 'json:droppedUndecodableObject';
+
+  /// A component entry that wasn't a JSON object — dropped.
+  static const droppedNonMapComponent = 'json:droppedNonMapComponent';
+
+  /// A component entry without a usable `id` — dropped.
+  static const droppedMissingIdComponent = 'json:droppedMissingIdComponent';
+
+  /// A child referenced by two parents was deep-cloned so each gets its own.
+  static const clonedReusedChild = 'tree:clonedReusedChild';
+
+  /// A child reference pointing at an id that doesn't exist — dropped.
+  static const droppedDanglingChild = 'tree:droppedDanglingChild';
+
+  /// Components unreachable from `root` — dropped.
+  static const droppedOrphan = 'tree:droppedOrphan';
+
+  /// No `root` and exactly one unreferenced node — promoted to `root`.
+  static const promotedLoneRoot = 'root:promotedLoneNode';
+
+  /// No `root` and several top-level nodes — wrapped in a new root Column.
+  static const wrappedRootsInColumn = 'root:wrappedInColumn';
+
+  /// `Text` was missing its required `text` prop — defaulted.
+  static const defaultedTextProp = 'props:defaultedText';
+
+  /// `Button` was missing its required `action` — defaulted to a no-op event.
+  static const defaultedButtonAction = 'props:defaultedButtonAction';
+
+  /// `Button` had no usable label child — a Text was synthesized.
+  static const synthesizedButtonLabel = 'props:synthesizedButtonLabel';
+
+  /// The model invented a `surfaceId` — pinned back to the created surface.
+  static const pinnedInventedSurfaceId = 'surface:pinnedInventedSurfaceId';
+}
+
+/// Records which repair rules fired (and on what) while repairing a response.
+///
+/// Pass one in to [repairRawResponse] / [repairUpdateComponents] to get
+/// per-rule counts back — the bench corpus (see `tool/bench.dart`) reports
+/// these as a model's failure-mode fingerprint. Pure data; safe to reuse.
+class RepairLog {
+  static const _maxDetailsPerRule = 8;
+
+  final Map<String, int> _counts = {};
+  final Map<String, List<String>> _details = {};
+  var _total = 0;
+
+  /// Record one firing of [rule]; [detail] names the component ids involved.
+  void note(String rule, [String? detail]) {
+    _counts[rule] = (_counts[rule] ?? 0) + 1;
+    _total++;
+    if (detail == null) return;
+    final list = _details.putIfAbsent(rule, () => []);
+    if (list.length < _maxDetailsPerRule) list.add(detail);
+  }
+
+  /// True when no repair fired — the model output was already clean.
+  bool get isEmpty => _total == 0;
+
+  /// Total number of individual repairs applied.
+  int get total => _total;
+
+  /// Per-rule fire counts, e.g. `{'tree:clonedReusedChild': 2}`.
+  Map<String, int> get counts => Map.unmodifiable(_counts);
+
+  /// Up to 8 details per rule naming the components each firing touched.
+  Map<String, List<String>> get details => {
+        for (final e in _details.entries)
+          e.key: List<String>.unmodifiable(e.value),
+      };
+
+  @override
+  String toString() {
+    if (isEmpty) return 'no repairs';
+    final parts = _counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return parts.map((e) => '${e.key}×${e.value}').join(', ');
+  }
+}
+
 /// Extract candidate JSON objects from raw LLM text (handles ```json fences,
 /// surrounding prose, and multiple concatenated objects) by scanning for
 /// balanced top-level braces.
@@ -146,7 +237,7 @@ String _relaxBraces(String s) {
   return out.toString();
 }
 
-List<Map<String, dynamic>> extractJsonObjects(String raw) {
+List<Map<String, dynamic>> extractJsonObjects(String raw, {RepairLog? log}) {
   final out = <Map<String, dynamic>>[];
   var depth = 0;
   var start = -1;
@@ -173,10 +264,18 @@ List<Map<String, dynamic>> extractJsonObjects(String raw) {
       depth--;
       if (depth == 0 && start >= 0) {
         final slice = raw.substring(start, i + 1);
-        Map<String, dynamic>? decoded = _tryDecodeMap(slice);
-        // Tolerate the common small-model brace error (a missing `}` that nests
-        // what should be a sibling object) by re-balancing and retrying.
-        decoded ??= _tryDecodeMap(_relaxBraces(slice));
+        var decoded = _tryDecodeMap(slice);
+        if (decoded == null) {
+          // Tolerate the common small-model brace error (a missing `}` that
+          // nests what should be a sibling object) by re-balancing and retry.
+          final relaxed = _tryDecodeMap(_relaxBraces(slice));
+          if (relaxed != null) {
+            log?.note(RepairRules.rebalancedBraces);
+            decoded = relaxed;
+          } else {
+            log?.note(RepairRules.droppedUndecodableObject);
+          }
+        }
         if (decoded != null) out.add(decoded);
         start = -1;
       }
@@ -187,7 +286,10 @@ List<Map<String, dynamic>> extractJsonObjects(String raw) {
 
 /// Repair a single `updateComponents` message in place-safe fashion, returning
 /// a new repaired message map. Non-updateComponents messages pass through.
-Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
+Map<String, dynamic> repairUpdateComponents(
+  Map<String, dynamic> message, {
+  RepairLog? log,
+}) {
   final uc = message['updateComponents'];
   if (uc is! Map) return message;
   final rawComps = uc['components'];
@@ -197,10 +299,16 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
   final byId = <String, Map<String, dynamic>>{};
   final order = <String>[];
   for (final c in rawComps) {
-    if (c is! Map) continue;
+    if (c is! Map) {
+      log?.note(RepairRules.droppedNonMapComponent, '$c');
+      continue;
+    }
     final m = Map<String, dynamic>.from(c);
     final id = m['id']?.toString();
-    if (id == null || id.isEmpty) continue;
+    if (id == null || id.isEmpty) {
+      log?.note(RepairRules.droppedMissingIdComponent);
+      continue;
+    }
     byId[id] = m;
     order.add(id);
   }
@@ -249,10 +357,14 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
     final child = node['child'];
     if (child is String) {
       if (!byId.containsKey(child)) {
+        log?.note(RepairRules.droppedDanglingChild, '$id→$child');
         node.remove('child');
       } else {
         var cid = child;
-        if (claimed.contains(cid)) cid = cloneSubtree(cid);
+        if (claimed.contains(cid)) {
+          log?.note(RepairRules.clonedReusedChild, '$id→$child');
+          cid = cloneSubtree(cid);
+        }
         node['child'] = cid;
         claimed.add(cid);
         claim(cid, depth + 1);
@@ -265,9 +377,15 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
       final fixed = <String>[];
       for (final raw in children) {
         final ref = raw.toString();
-        if (!byId.containsKey(ref)) continue; // drop dangling
+        if (!byId.containsKey(ref)) {
+          log?.note(RepairRules.droppedDanglingChild, '$id→$ref');
+          continue; // drop dangling
+        }
         var cid = ref;
-        if (claimed.contains(cid)) cid = cloneSubtree(cid);
+        if (claimed.contains(cid)) {
+          log?.note(RepairRules.clonedReusedChild, '$id→$ref');
+          cid = cloneSubtree(cid);
+        }
         fixed.add(cid);
         claimed.add(cid);
         claim(cid, depth + 1);
@@ -292,6 +410,7 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
     final unref = order.where((id) => !referenced.contains(id)).toList();
     if (unref.length == 1) {
       // Promote the lone top-level node to "root".
+      log?.note(RepairRules.promotedLoneRoot, unref.first);
       final node = byId.remove(unref.first)!;
       node['id'] = 'root';
       byId['root'] = node;
@@ -299,6 +418,7 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
       rootId = 'root';
     } else {
       // Wrap all top-level nodes in a new root Column.
+      log?.note(RepairRules.wrappedRootsInColumn);
       byId['root'] = {
         'id': 'root',
         'component': 'Column',
@@ -319,16 +439,21 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
     final type = n['component']?.toString();
     switch (type) {
       case 'Text':
-        n['text'] ??= '';
+        if (n['text'] == null) {
+          log?.note(RepairRules.defaultedTextProp, id);
+          n['text'] = '';
+        }
       case 'Button':
         // Button needs an action.
         if (n['action'] is! Map) {
+          log?.note(RepairRules.defaultedButtonAction, id);
           n['action'] = {
             'event': {'name': 'action', 'context': <String, dynamic>{}},
           };
         }
         // Button needs a label child.
         if (n['child'] is! String || !byId.containsKey(n['child'])) {
+          log?.note(RepairRules.synthesizedButtonLabel, id);
           final labelId = freshId('label');
           byId[labelId] = {'id': labelId, 'component': 'Text', 'text': 'OK'};
           order.add(labelId);
@@ -355,6 +480,11 @@ Map<String, dynamic> repairUpdateComponents(Map<String, dynamic> message) {
   }
 
   collect(rootId);
+  final orphans = byId.keys.where((id) => !seen.contains(id)).toList()..sort();
+  if (orphans.isNotEmpty && orphans.length != byId.length) {
+    // (Equal length means nothing was reachable — already reported elsewhere.)
+    log?.note(RepairRules.droppedOrphan, orphans.join(','));
+  }
 
   return {
     ...message,
@@ -372,12 +502,14 @@ String repairRawResponse(
   String raw, {
   required String surfaceId,
   required String catalogId,
+  RepairLog? log,
 }) {
-  final msgs = extractJsonObjects(raw);
+  final msgs = extractJsonObjects(raw, log: log);
   final hasCreate = msgs.any((m) => m.containsKey('createSurface'));
   final out = <Map<String, dynamic>>[];
 
   if (!hasCreate) {
+    log?.note(RepairRules.injectedCreateSurface);
     out.add({
       'version': 'v0.9',
       'createSurface': {
@@ -389,16 +521,25 @@ String repairRawResponse(
   }
   for (final m in msgs) {
     if (m.containsKey('updateComponents')) {
-      final repaired = repairUpdateComponents(m);
+      final repaired = repairUpdateComponents(m, log: log);
       // Small models freely invent their own surfaceId (e.g. "week_summary"),
       // so the components target a surface that was never created and nothing
       // mounts. Force every update onto the surface we actually created.
       final uc = repaired['updateComponents'];
-      if (uc is Map) uc['surfaceId'] = surfaceId;
+      if (uc is Map) {
+        if (uc['surfaceId'] != surfaceId) {
+          log?.note(RepairRules.pinnedInventedSurfaceId, '${uc['surfaceId']}');
+        }
+        uc['surfaceId'] = surfaceId;
+      }
       out.add(repaired);
     } else if (m.containsKey('createSurface')) {
       // Likewise pin a model-emitted createSurface to our surface + catalog.
       final cs = Map<String, dynamic>.from(m['createSurface'] as Map);
+      if (cs['surfaceId'] != surfaceId || cs['catalogId'] != catalogId) {
+        log?.note(
+            RepairRules.pinnedInventedSurfaceId, cs['surfaceId']?.toString());
+      }
       cs['surfaceId'] = surfaceId;
       cs['catalogId'] = catalogId;
       out.add({...m, 'createSurface': cs});

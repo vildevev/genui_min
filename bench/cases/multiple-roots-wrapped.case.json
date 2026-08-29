@@ -1,0 +1,7 @@
+{
+  "name": "multiple-roots-wrapped",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A weekly brief with a title and a big glow-score stat.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"title\",\"component\":\"Text\",\"variant\":\"title\",\"text\":\"Weekly brief\"},\n{\"id\":\"glow\",\"component\":\"Stat\",\"value\":\"66\",\"label\":\"Glow score\",\"delta\":\"+4\",\"trend\":\"up\"}\n]}}\n```"
+}

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genui_min/genui_min.dart';
 
@@ -156,6 +154,47 @@ void main() {
     });
   });
 
+  group('RepairLog telemetry', () {
+    test('counts each fired rule with component-level details', () {
+      final raw = '```json\n'
+          '{"version":"v0.9","updateComponents":{"surfaceId":"other",'
+          '"components":[{"id":"root","component":"Column","children":["c","b"]},'
+          '{"id":"c","component":"Card","child":"t"},'
+          '{"id":"t","component":"Text","text":"tip"},'
+          '{"id":"b","component":"Button"}]}}\n```';
+      final log = RepairLog();
+      repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x', log: log);
+      expect(log.counts['inject:createSurface'], 1);
+      expect(log.counts['surface:pinnedInventedSurfaceId'], 1);
+      expect(log.counts['props:defaultedButtonAction'], 1);
+      expect(log.counts['props:synthesizedButtonLabel'], 1);
+      expect(
+        log.details['props:synthesizedButtonLabel'],
+        contains('b'),
+      );
+      expect(log.total, log.counts.values.reduce((a, b) => a + b));
+      expect(log.toString(), contains('props:synthesizedButtonLabel×1'));
+    });
+
+    test('clean output reports no repairs beyond the createSurface inject', () {
+      final raw = '```json\n'
+          '{"version":"v0.9","updateComponents":{"surfaceId":"main",'
+          '"components":[{"id":"root","component":"Text","text":"hi"}]}}\n```';
+      final log = RepairLog();
+      repairRawResponse(raw, surfaceId: 'main', catalogId: 'cat://x', log: log);
+      expect(log.counts, {'inject:createSurface': 1});
+      expect(log.isEmpty, isFalse);
+    });
+
+    test('json recovery is observable through the log', () {
+      final raw = '{"a":1} {"c" 3}'; // second slice closes but won't decode
+      final log = RepairLog();
+      final objs = extractJsonObjects(raw, log: log);
+      expect(objs, hasLength(1));
+      expect(log.counts['json:droppedUndecodableObject'], 1);
+    });
+  });
+
   group('repairRawResponse', () {
     test('injects createSurface when absent and emits fenced messages', () {
       final raw = '```json\n'
@@ -233,36 +272,6 @@ void main() {
       );
       expect(out, contains('"surfaceId": "main"'));
       expect(out, isNot(contains('week_summary')));
-    });
-
-    test('repairs the documented fixture failure modes', () {
-      final fixtures = Directory('test/fixtures')
-          .listSync()
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.raw.txt'))
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
-
-      expect(fixtures, hasLength(5));
-
-      for (final fixture in fixtures) {
-        final out = repairRawResponse(
-          fixture.readAsStringSync(),
-          surfaceId: 'main',
-          catalogId: 'cat://fixture',
-        );
-
-        expect(out, contains('"createSurface"'), reason: fixture.path);
-        expect(out, contains('"updateComponents"'), reason: fixture.path);
-        expect(out, contains('"surfaceId": "main"'), reason: fixture.path);
-
-        final repaired = extractJsonObjects(
-          out,
-        ).firstWhere((msg) => msg.containsKey('updateComponents'));
-        final components = _comps(repaired);
-        expect(components, isNotEmpty, reason: fixture.path);
-        expect(components.first['id'], 'root', reason: fixture.path);
-      }
     });
   });
 }
