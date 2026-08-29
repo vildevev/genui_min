@@ -82,7 +82,7 @@ Future<Map<String, Object?>> _getJson(Uri uri, {required String host}) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
     final res = await client.getUrl(uri).then((r) => r.close());
-    return _decode(res, host);
+    return await _decode(res, host);
   } on SocketException catch (e) {
     throw SocketException(
       'could not reach Ollama at $host — is `ollama serve` running?',
@@ -105,7 +105,7 @@ Future<Map<String, Object?>> _postJson(
     req.headers.contentType = ContentType.json;
     req.write(jsonEncode(body));
     final res = await req.close().timeout(const Duration(minutes: 4));
-    return _decode(res, host);
+    return await _decode(res, host);
   } on SocketException catch (e) {
     throw SocketException(
       'could not reach Ollama at $host — is `ollama serve` running?',
