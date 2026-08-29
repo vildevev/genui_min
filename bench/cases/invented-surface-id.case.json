@@ -1,0 +1,7 @@
+{
+  "name": "invented-surface-id",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A weekly habit summary card with a big percentage stat and a button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"week_summary\",\"components\":[\n{\"id\":\"root\",\"component\":\"Card\",\"child\":\"title\"},\n{\"id\":\"title\",\"component\":\"Text\",\"variant\":\"title\",\"text\":\"Weekly brief\"}\n]}}\n```\n"
+}

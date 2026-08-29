@@ -2,7 +2,7 @@ name: genui_min
 description: >-
   Drive Google's genui / A2UI renderer with a small on-device LLM: a minimal
   styled component catalog plus a deterministic repair pass for small-model output.
-version: 0.1.1
+version: 0.2.0
 repository: https://github.com/vildevev/genui_min
 issue_tracker: https://github.com/vildevev/genui_min/issues
 

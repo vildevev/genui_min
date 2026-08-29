@@ -1,0 +1,7 @@
+{
+  "name": "missing-brace-nests-sibling",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "captured",
+  "prompt": "A card titled \"Hi\" with a button labelled \"Got it\".",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"title_text\",\"cta_button\"]},{\"id\":\"title_text\",\"component\":\"Text\",\"text\":\"Hi\"},{\"id\":\"cta_button\",\"component\":\"Button\",\"child\":\"cta_label\",\"action\":{\"event\":{\"name\":\"got_it\"}},{\"id\":\"cta_label\",\"component\":\"Text\",\"text\":\"Got it\"}}]}}\n```"
+}

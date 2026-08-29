@@ -1,0 +1,7 @@
+{
+  "name": "prose-wrapped-output",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "captured",
+  "prompt": "A card titled \"Glow tip\" with one short sentence and a button.",
+  "raw": "Sure! Here's your card:\n```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"tip_card\",\"cta\"]},\n{\"id\":\"tip_card\",\"component\":\"Card\",\"child\":\"tip_text\"},\n{\"id\":\"tip_text\",\"component\":\"Text\",\"text\":\"Apply SPF every morning.\"},\n{\"id\":\"cta\",\"component\":\"Button\",\"child\":\"cta_label\",\"action\":{\"event\":{\"name\":\"more\",\"context\":{}}}},\n{\"id\":\"cta_label\",\"component\":\"Text\",\"text\":\"Tell me more\"}\n]}}\n```\nHope this helps — let me know if you'd like a different tone!"
+}

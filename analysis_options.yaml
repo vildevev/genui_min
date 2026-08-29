@@ -1,1 +1,6 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # CLI tools are exactly the place where printing is the job.
+    - tool/**

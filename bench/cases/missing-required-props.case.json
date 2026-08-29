@@ -1,0 +1,7 @@
+{
+  "name": "missing-required-props",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A card with a title, some body text, and a button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"t\",\"b\"]},\n{\"id\":\"t\",\"component\":\"Text\",\"variant\":\"title\"},\n{\"id\":\"b\",\"component\":\"Button\"}\n]}}\n```"
+}

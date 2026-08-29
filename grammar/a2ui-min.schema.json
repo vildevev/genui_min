@@ -1,0 +1,298 @@
+{
+  "type": "object",
+  "title": "genui_min updateComponents message",
+  "description": "Exactly one A2UI v0.9 updateComponents message describing the UI tree as a flat list of components (one with id \"root\").",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v0.9"
+    },
+    "updateComponents": {
+      "type": "object",
+      "description": "Updates a surface with a new set of components. This message can be sent multiple times to update the component tree of an existing surface. One of the components in one of the components lists MUST have an 'id' of 'root' to serve as the root of the component tree. The createSurface message MUST have been previously sent with the 'catalogId' that is in this message.",
+      "properties": {
+        "surfaceId": {
+          "type": "string",
+          "description": "The unique identifier for the UI surface."
+        },
+        "components": {
+          "type": "array",
+          "description": "A flat list of component definitions.",
+          "items": {
+            "description": "Must match one of the component definitions in the catalog.",
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "A block of text.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique component id. Exactly one component in the whole list must use the id \"root\"."
+                  },
+                  "component": {
+                    "type": "string",
+                    "enum": [
+                      "Text"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "The text content to display."
+                  },
+                  "variant": {
+                    "type": "string",
+                    "description": "Style hint: \"title\" for a heading, \"body\" for normal.",
+                    "enum": [
+                      "title",
+                      "body"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "component",
+                  "text"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "A visual container (card) that groups a single child widget.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique component id. Exactly one component in the whole list must use the id \"root\"."
+                  },
+                  "component": {
+                    "type": "string",
+                    "enum": [
+                      "Card"
+                    ]
+                  },
+                  "child": {
+                    "type": "string",
+                    "description": "The ID of a component."
+                  }
+                },
+                "required": [
+                  "id",
+                  "component",
+                  "child"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "An interactive button that triggers an action when pressed.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique component id. Exactly one component in the whole list must use the id \"root\"."
+                  },
+                  "component": {
+                    "type": "string",
+                    "enum": [
+                      "Button"
+                    ]
+                  },
+                  "child": {
+                    "type": "string",
+                    "description": "ID of the Text component used as the button label."
+                  },
+                  "action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "event": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "description": "The name of the action to be dispatched to the server."
+                              },
+                              "context": {
+                                "type": "object",
+                                "description": "Arbitrary context data to send with the action.",
+                                "additionalProperties": true
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "event"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "functionCall": {
+                            "type": "object",
+                            "properties": {
+                              "call": {
+                                "type": "string",
+                                "description": "The name of the function to call."
+                              },
+                              "args": {
+                                "type": "object",
+                                "description": "Arguments to pass to the function.",
+                                "additionalProperties": true
+                              }
+                            },
+                            "required": [
+                              "call"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "functionCall"
+                        ]
+                      }
+                    ]
+                  },
+                  "variant": {
+                    "type": "string",
+                    "description": "Style hint.",
+                    "enum": [
+                      "primary",
+                      "borderless"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "component",
+                  "child",
+                  "action"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "A layout widget that arranges its children vertically.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique component id. Exactly one component in the whole list must use the id \"root\"."
+                  },
+                  "component": {
+                    "type": "string",
+                    "enum": [
+                      "Column"
+                    ]
+                  },
+                  "children": {
+                    "description": "The list of child component IDs.",
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "description": "Component ID"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "componentId": {
+                            "type": "string",
+                            "description": "The ID of a component."
+                          },
+                          "path": {
+                            "type": "string",
+                            "description": "A relative or absolute path in the data model."
+                          }
+                        },
+                        "required": [
+                          "componentId",
+                          "path"
+                        ]
+                      }
+                    ]
+                  },
+                  "justify": {
+                    "type": "string",
+                    "description": "Main-axis alignment.",
+                    "enum": [
+                      "start",
+                      "center",
+                      "end",
+                      "spaceBetween"
+                    ]
+                  },
+                  "align": {
+                    "type": "string",
+                    "description": "Cross-axis alignment.",
+                    "enum": [
+                      "start",
+                      "center",
+                      "end",
+                      "stretch"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "component",
+                  "children"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "A single metric readout: a large value, a short caption label, and an optional change indicator. Use this for any number or metric instead of a plain Text.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique component id. Exactly one component in the whole list must use the id \"root\"."
+                  },
+                  "component": {
+                    "type": "string",
+                    "enum": [
+                      "Stat"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "The metric value, e.g. \"66\", \"90%\", \"5 days\"."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "A short caption under the value, e.g. \"Glow score\"."
+                  },
+                  "delta": {
+                    "type": "string",
+                    "description": "Optional change text, e.g. \"+4\" or \"up 6%\"."
+                  },
+                  "trend": {
+                    "type": "string",
+                    "description": "Direction of the change, drives color and arrow.",
+                    "enum": [
+                      "up",
+                      "down",
+                      "flat"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "component",
+                  "value"
+                ]
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "surfaceId",
+        "components"
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "updateComponents"
+  ],
+  "additionalProperties": false
+}
