@@ -1,0 +1,25 @@
+name: genui_min_gallery
+description: >-
+  Interactive component gallery for genui_min — every catalog widget rendered
+  through the real A2UI pipeline, plus a live JSON playground with repair.
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  genui: ^0.9.0
+  genui_min:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

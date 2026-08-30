@@ -110,6 +110,13 @@ Pass a `RepairLog` and you get back exactly **which** repairs fired (`tree:clone
 ### Bring any runner
 The pipeline needs any source of text: `LlmRunner` is the one-method contract. On-device via `flutter_gemma` (see the example app's ~15-line adapter), or over a local `ollama serve` via `OllamaRunner` (`package:genui_min/ollama.dart`) — the laptop path with no phone required.
 
+### The gallery: see the catalog
+`gallery/` is a web-buildable component gallery — every catalog widget rendered through the real pipeline with its props, variants, and A2UI JSON, plus a live playground where you can paste or break A2UI and watch the repair log fix it (no model needed).
+
+```bash
+cd gallery && flutter pub get && flutter run    # or: flutter build web
+```
+
 ### Three gotchas (learned the hard way)
 1. **Rebuild the genui transport every turn.** `A2uiTransportAdapter.flush()` permanently *closes* its input stream — reuse throws `Bad state: Cannot add event after closing`. Make a fresh `SurfaceController` + `A2uiTransportAdapter` + `Conversation` per generation.
 2. **The app creates the surface; the model just fills it.** Small models reliably emit `updateComponents` but skip the `createSurface` bootstrap — `repairRawResponse` injects it for you.

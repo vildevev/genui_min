@@ -38,3 +38,11 @@ jobs:
       - name: Analyze example
         working-directory: example
         run: flutter analyze
+
+      - name: Install gallery dependencies
+        working-directory: gallery
+        run: flutter pub get
+
+      - name: Analyze gallery
+        working-directory: gallery
+        run: flutter analyze

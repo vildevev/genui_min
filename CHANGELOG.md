@@ -26,6 +26,10 @@ not just a Flutter package:
   Verified live against a local Ollama: qwen3:4b unconstrained produced
   undecodable JSON (captured as the first XFAIL corpus case); with the
   schema, a renderable tree and zero semantic repairs.
+- **Component gallery** (`gallery/`): a web-buildable, model-free app that
+  renders every catalog widget through the real pipeline (variants, props
+  from the live schema, A2UI JSON), plus a live A2UI playground with the
+  repair log and composed example cards.
 - New docs: `doc/bench.md` (corpus format + contributing cases),
   `doc/constrained.md` (schema/grammar usage + limitations). CI now runs
   the bench too. `tool/live_check.dart` manually scores a local model
