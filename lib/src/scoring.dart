@@ -12,13 +12,15 @@
 import 'a2ui_repair.dart';
 
 /// Component names in the default `styledMinimalCatalog()`. Scoring needs the
-/// names only (not the catalog) to stay Flutter-free.
+/// names only (not the catalog) to stay Flutter-free. `Row` is included
+/// because it is the catalog's most common `extra` component.
 const Set<String> minimalComponentNames = {
   'Text',
   'Card',
   'Button',
   'Column',
   'Stat',
+  'Row',
 };
 
 /// The result of scoring one raw model response through the repair pipeline.
@@ -200,6 +202,10 @@ void _scoreUpdate(
       case 'Column':
         if (c['children'] is! List || (c['children'] as List).isEmpty) {
           failures.add('Column "$id" has no children');
+        }
+      case 'Row':
+        if (c['children'] is! List || (c['children'] as List).isEmpty) {
+          failures.add('Row "$id" has no children');
         }
       case 'Stat':
         if (c['value'] is! String) failures.add('Stat "$id" has no value');

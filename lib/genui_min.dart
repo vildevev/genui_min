@@ -45,5 +45,6 @@ library;
 export 'src/a2ui_repair.dart';
 export 'src/constrained.dart';
 export 'src/gbnf.dart';
+export 'src/genui_min_surface.dart';
 export 'src/llm_runner.dart';
 export 'src/styled_catalog.dart';
