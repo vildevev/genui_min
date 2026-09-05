@@ -251,6 +251,70 @@ final CatalogItem styledStat = CatalogItem(
   },
 );
 
+/// A `Row` — horizontal layout with spacing, mirroring the basic catalog's
+/// Row schema so prompts stay standard. Compose into the catalog via
+/// [styledMinimalCatalog] `extra` when a screen needs side-by-side children.
+final CatalogItem styledRow = CatalogItem(
+  name: 'Row',
+  dataSchema: jsb.S.object(
+    description: 'A layout widget that arranges its children horizontally.',
+    properties: {
+      'children': A2uiSchemas.componentArrayReference(
+        description: 'The list of child component IDs.',
+      ),
+      'justify': jsb.S.string(
+        description: 'Main-axis alignment.',
+        enumValues: [
+          'start',
+          'center',
+          'end',
+          'spaceBetween',
+          'spaceAround',
+          'spaceEvenly',
+        ],
+      ),
+      'align': jsb.S.string(
+        description: 'Cross-axis alignment.',
+        enumValues: ['start', 'center', 'end', 'stretch'],
+      ),
+    },
+    required: ['children'],
+  ),
+  widgetBuilder: (ctx) {
+    final data = ctx.data as JsonMap;
+    final childrenRaw = data['children'];
+    final ids = childrenRaw is List
+        ? childrenRaw.map((e) => e.toString()).toList()
+        : const <String>[];
+    final main = switch (data['justify']?.toString()) {
+      'start' => MainAxisAlignment.start,
+      'center' => MainAxisAlignment.center,
+      'end' => MainAxisAlignment.end,
+      'spaceBetween' => MainAxisAlignment.spaceBetween,
+      'spaceAround' => MainAxisAlignment.spaceAround,
+      'spaceEvenly' => MainAxisAlignment.spaceEvenly,
+      _ => MainAxisAlignment.start,
+    };
+    final cross = switch (data['align']?.toString()) {
+      'start' => CrossAxisAlignment.start,
+      'end' => CrossAxisAlignment.end,
+      'stretch' => CrossAxisAlignment.stretch,
+      _ => CrossAxisAlignment.center,
+    };
+    final children = <Widget>[];
+    for (var i = 0; i < ids.length; i++) {
+      if (i > 0) children.add(const SizedBox(width: 10));
+      children.add(ctx.buildChild(ids[i]));
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: main,
+      crossAxisAlignment: cross,
+      children: children,
+    );
+  },
+);
+
 void _dispatchAction(CatalogItemContext ctx, Object? action) {
   if (action is! Map) return;
   final event = action['event'];
@@ -293,17 +357,42 @@ const String minimalFewShotExample =
 
 /// Build the minimal styled catalog. [catalogId] defaults to the A2UI basic
 /// catalog id so it interops with the basic-catalog system prompt scaffolding.
-Catalog styledMinimalCatalog({String? catalogId}) => Catalog(
-      [styledText, styledCard, styledButton, styledColumn, styledStat],
-      functions: const [],
-      catalogId: catalogId ?? basicCatalogId,
-      systemPromptFragments: [
-        BasicCatalogItems.basicCatalogRules,
-        minimalComponentRules,
-        minimalFewShotExample,
-      ],
-    );
+///
+/// [extra] composes optional components (e.g. [styledRow]) into the catalog —
+/// by name, replacing the basic version if one exists. Every extra widens
+/// what the model can build *and* grows the system prompt; check the cost
+/// with [catalogPromptTokens] before shipping.
+Catalog styledMinimalCatalog({
+  String? catalogId,
+  List<CatalogItem> extra = const [],
+}) {
+  final extrasByName = {for (final item in extra) item.name: item};
+  final basics = [
+    styledText,
+    styledCard,
+    styledButton,
+    styledColumn,
+    styledStat,
+  ].where((item) => !extrasByName.containsKey(item.name));
+  return Catalog(
+    [...basics, ...extra],
+    functions: const [],
+    catalogId: catalogId ?? basicCatalogId,
+    systemPromptFragments: [
+      BasicCatalogItems.basicCatalogRules,
+      minimalComponentRules,
+      minimalFewShotExample,
+    ],
+  );
+}
 
 /// The joined system prompt for a given catalog (chat / create-only mode).
 String minimalSystemPrompt(Catalog catalog) =>
     PromptBuilder.chat(catalog: catalog).systemPromptJoined();
+
+/// Rough token cost of [catalog]'s system prompt (~4 chars/token heuristic —
+/// good enough to compare catalogs, not a billing figure). This is the
+/// prompt-size dial: every component you add spends from the small model's
+/// context here.
+int catalogPromptTokens(Catalog catalog) =>
+    minimalSystemPrompt(catalog).length ~/ 4;

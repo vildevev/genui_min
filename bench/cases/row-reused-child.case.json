@@ -1,0 +1,7 @@
+{
+  "name": "row-reused-child",
+  "model": "gemma-3n-e2b-it-int4",
+  "provenance": "synthesized",
+  "prompt": "A stat row with a score stat next to a streak stat, and a button.",
+  "raw": "```json\n{\"version\":\"v0.9\",\"updateComponents\":{\"surfaceId\":\"main\",\"components\":[\n{\"id\":\"root\",\"component\":\"Column\",\"children\":[\"row\",\"btn\"]},\n{\"id\":\"row\",\"component\":\"Row\",\"children\":[\"score\",\"score\"]},\n{\"id\":\"score\",\"component\":\"Stat\",\"value\":\"66\",\"label\":\"Glow score\"},\n{\"id\":\"btn\",\"component\":\"Button\",\"child\":\"bl\",\"action\":{\"event\":{\"name\":\"go\",\"context\":{}}}},\n{\"id\":\"bl\",\"component\":\"Text\",\"text\":\"Keep going\"}\n]}}\n```\n"
+}
