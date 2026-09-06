@@ -1,10 +1,16 @@
 name: genui_min
 description: >-
-  Drive Google's genui / A2UI renderer with a small on-device LLM: a minimal
-  styled component catalog plus a deterministic repair pass for small-model output.
-version: 0.2.0
+  Generative UI from a small on-device LLM: one widget (GenuiMinSurface), a
+  minimal styled genui/A2UI component catalog whose system prompt fits a 2-4B
+  model, and a deterministic repair pass for small-model output.
+version: 0.3.0
 repository: https://github.com/vildevev/genui_min
 issue_tracker: https://github.com/vildevev/genui_min/issues
+topics:
+  genai
+  llm
+  ui
+  a2ui
 
 environment:
   sdk: ^3.5.0
@@ -22,5 +28,13 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+
+screenshots:
+  - path: doc/hero.png
+    description: A prompt turned into a rendered Flutter card by an on-device LLM
+  - path: doc/card-today.png
+    description: A generated 'Today synthesis' card with a Stat metric
+  - path: doc/card-weekly.png
+    description: A generated 'Weekly brief' card with a Stat metric
 
 flutter:
