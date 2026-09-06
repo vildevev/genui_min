@@ -1,3 +1,21 @@
+## 0.3.0
+
+- **`GenuiMinSurface`** — the five-line integration widget. Rebuilds the genui
+  transport per turn (fresh `SurfaceController`/adapter/`Conversation`, disposed
+  cleanly), repairs raw model output before render, renders through a real
+  `Surface`, and reports button taps (`onAction`), repairs (`onRepair`), and
+  failures (`onError`). Drive it with any `LlmRunner` via
+  `GlobalKey<GenuiMinSurfaceState>.generate()`, or render raw text directly
+  with `GenuiMinSurface(raw: ...)`.
+- **Opt-in catalog components.** `styledMinimalCatalog({extra: [styledRow]})`
+  composes extra components by name; `catalogPromptTokens(catalog)` shows the
+  system-prompt cost. A prompt-budget regression test pins the default
+  catalog's prompt (~4.7k tokens) in CI.
+- Scoring and the bench corpus know about `Row`; new `row-reused-child` case.
+- Fixed: a `raw`-prop re-render could stay subscribed to the disposed
+  conversation and never show new content. Render errors now appear above the
+  kept previous content instead of replacing it.
+
 ## 0.2.0
 
 Three additions aimed at making genui_min a toolbox for small-model A2UI,

@@ -46,6 +46,35 @@ genui is excellent, but its full `BasicCatalog` (18 widgets) produces a **~19,00
 
 ## Quick start
 
+The fastest path is `GenuiMinSurface` — one widget that does repair, transport
+lifecycle, and rendering for you:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:genui_min/genui_min.dart';
+
+final _surfaceKey = GlobalKey<GenuiMinSurfaceState>();
+
+final surface = GenuiMinSurface(
+  key: _surfaceKey,
+  runner: myRunner,                       // anything with `generate(prompt)`
+  onAction: (action) => print('tap: ${action.name}'),
+  onRepair: (log) => analytics('repairs', log.counts),
+  onError: (error) => showError(error),
+);
+
+// Later — ask for UI. Repaired and rendered when the model answers.
+await _surfaceKey.currentState!.generate('A weekly summary card with a button');
+```
+
+Already holding the model's raw text (e.g. replaying a cached response)?
+
+```dart
+const GenuiMinSurface(raw: modelOutput)   // fences, prose and bugs welcome
+```
+
+Prefer to stay in control? The pipeline is fully exposed:
+
 ```dart
 import 'package:genui/genui.dart';
 import 'package:genui_min/genui_min.dart';
@@ -89,6 +118,17 @@ For a tighter runtime integration checklist, see
 ### The catalog is the prompt-size dial
 genui builds the system prompt from the JSON schema of **every** widget in the catalog. Fewer widgets → a dramatically smaller prompt. A handful of components (`Text · Card · Button · Column · Stat`) cover most "card + actions" UIs. `styledMinimalCatalog()` keeps the same A2UI component names and schemas as the basic catalog — so the prompt format is standard — but ships **custom renderers** so the result looks good out of the box.
 
+Need more? Compose opt-in components into the catalog — `Row` ships today:
+
+```dart
+final catalog = styledMinimalCatalog(extra: [styledRow]);
+print(catalogPromptTokens(catalog)); // 5,329 — vs 4,680 for the default five
+```
+
+Every extra widens what the model can build **and** spends context; check the
+cost with `catalogPromptTokens()` (and the prompt-budget test guards the
+default five for you) before you ship.
+
 ### The repair pass makes small models safe
 `repairUpdateComponents()` (pure Dart, unit-tested) turns rough model output into a clean, renderable tree:
 
@@ -128,7 +168,7 @@ cd gallery && flutter pub get && flutter run    # or: flutter build web
 
 ```yaml
 dependencies:
-  genui_min: ^0.2.0
+  genui_min: ^0.3.0
   genui: ^0.9.0
 ```
 
