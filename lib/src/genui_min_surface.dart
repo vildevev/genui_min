@@ -3,9 +3,13 @@
 // and drive it with `generate()` via a GlobalKey. It rebuilds the genui
 // transport per turn (flush() closes the stream), injects/repairs via
 // `repairRawResponse`, renders through a real Surface, and reports button
-// taps (`onAction`), repairs (`onRepair`), and failures (`onError`).
+// taps (`onAction`), streamed chunks (`onChunk`), repairs (`onRepair`), and
+// failures (`onError`). Runners that also implement `LlmStreamRunner` get a
+// live preview while the model writes; past requests and taps feed the next
+// prompt (multi-turn).
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -35,6 +39,11 @@ import 'a2ui_repair.dart';
 /// ```dart
 /// GenuiMinSurface(raw: modelOutput)
 /// ```
+///
+/// If [runner] also implements [LlmStreamRunner], [generate] streams the
+/// response into a live preview as it is written (with [onChunk] per chunk);
+/// the final repaired render replaces the preview. Previous requests and
+/// tapped buttons are folded into each prompt — see [maxHistoryTurns].
 class GenuiMinSurface extends StatefulWidget {
   const GenuiMinSurface({
     super.key,
@@ -44,10 +53,12 @@ class GenuiMinSurface extends StatefulWidget {
     this.surfaceId = 'main',
     this.generateOptions,
     this.onAction,
+    this.onChunk,
     this.onRepair,
     this.onError,
     this.padding = const EdgeInsets.all(16),
     this.emptyPlaceholder,
+    this.maxHistoryTurns = 8,
   }) : assert(
           raw == null || runner == null,
           'Provide raw model output OR a runner to generate with, not both.',
@@ -75,6 +86,11 @@ class GenuiMinSurface extends StatefulWidget {
   /// the event the model attached to that button.
   final void Function(UserActionEvent action)? onAction;
 
+  /// A chunk of the model's response arrived while streaming (the runner
+  /// implements [LlmStreamRunner]). Fires during [generate], before the
+  /// repaired render.
+  final void Function(String chunk)? onChunk;
+
   /// The repair pass ran on the last render — [RepairLog.counts] says which
   /// rules fired. Zero entries means the model output was already clean.
   final void Function(RepairLog log)? onRepair;
@@ -88,6 +104,12 @@ class GenuiMinSurface extends StatefulWidget {
 
   /// Shown before the first successful render.
   final Widget? emptyPlaceholder;
+
+  /// How many past requests/taps to fold into each [generate] prompt
+  /// (multi-turn). Every entry spends the small model's context, so keep
+  /// this tight; `clearHistory()` resets the conversation. Prompt growth
+  /// from history is on top of [catalogPromptTokens]'s system-prompt cost.
+  final int maxHistoryTurns;
 
   @override
   State<GenuiMinSurface> createState() => GenuiMinSurfaceState();
@@ -105,6 +127,9 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
   StreamSubscription<ChatMessage>? _actions;
   Object? _error;
   var _busy = false;
+
+  /// Multi-turn transcript: user requests and tapped buttons, oldest first.
+  final ListQueue<String> _history = ListQueue<String>();
 
   @override
   void initState() {
@@ -133,16 +158,19 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
           final payload = jsonDecode(part.interaction);
           final action = payload is Map ? payload['action'] : null;
           if (action is! Map) continue;
+          final context = action['context'] is Map
+              ? Map<String, Object?>.from(action['context'] as Map)
+              : <String, Object?>{};
           widget.onAction?.call(
             UserActionEvent(
               surfaceId: action['surfaceId'] as String?,
               name: (action['name'] ?? '').toString(),
               sourceComponentId: (action['sourceComponentId'] ?? '').toString(),
-              context: action['context'] is Map
-                  ? Map<String, Object?>.from(action['context'] as Map)
-                  : <String, Object?>{},
+              context: context,
             ),
           );
+          _remember('user tapped button "${(action['name'] ?? '').toString()}"'
+              '${context.isEmpty ? '' : ' with ${jsonEncode(context)}'}');
         } catch (_) {
           // A malformed interaction part should never break the surface.
         }
@@ -150,13 +178,29 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
     });
   }
 
+  /// Append to the transcript, dropping the oldest turns past
+  /// [GenuiMinSurface.maxHistoryTurns].
+  void _remember(String turn) {
+    if (widget.maxHistoryTurns <= 0) return;
+    _history.addLast(turn);
+    while (_history.length > widget.maxHistoryTurns) {
+      _history.removeFirst();
+    }
+  }
+
+  /// Forget all past requests and taps — the next [generate] starts fresh.
+  void clearHistory() => _history.clear();
+
   /// Whether a [generate] call is in flight.
   bool get isBusy => _busy;
 
   /// Generate with the configured [GenuiMinSurface.runner] and render the
   /// result. Returns the raw model text (also available for debugging).
   /// Throws [StateError] if a generation is already in flight or the widget
-  /// was created without a runner.
+  /// was created without a runner. If the runner implements
+  /// [LlmStreamRunner], chunks stream into a live preview as they arrive and
+  /// [GenuiMinSurface.onChunk] fires per chunk; the final repaired render
+  /// replaces the preview.
   Future<String> generate(String userRequest) async {
     if (_busy) {
       throw StateError(
@@ -171,13 +215,16 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
         'existing text, or provide `runner:` to generate.',
       );
     }
-    final prompt =
-        '${minimalSystemPrompt(_catalog)}\n\nUser request: $userRequest\n'
-        'Respond with ONLY the A2UI messages described above — no prose.';
+    _remember('user: $userRequest');
+    final prompt = _buildPrompt(userRequest);
     _busy = true;
     try {
-      final raw =
-          await runner.generate(prompt, options: widget.generateOptions);
+      final String raw;
+      if (runner case final LlmStreamRunner streamRunner) {
+        raw = await _generateStreaming(streamRunner, prompt);
+      } else {
+        raw = await runner.generate(prompt, options: widget.generateOptions);
+      }
       await render(raw);
       return raw;
     } finally {
@@ -185,11 +232,56 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
     }
   }
 
-  /// Repair and render [raw] model output, replacing whatever was shown.
-  Future<void> render(String raw) async {
-    // The transport's flush() closes its input stream — a fresh
-    // controller/adapter/conversation per render is required, not optional.
-    await _actions?.cancel();
+  /// The system prompt plus the multi-turn transcript plus this turn's ask.
+  String _buildPrompt(String userRequest) {
+    final prompt = StringBuffer(minimalSystemPrompt(_catalog));
+    if (_history.isNotEmpty) {
+      prompt
+        ..writeln()
+        ..writeln()
+        ..writeln(
+          'Conversation so far (regenerate the FULL surface each turn):',
+        )
+        ..writeAll(_history.map((turn) => '- $turn'), '\n');
+    }
+    prompt
+      ..writeln()
+      ..writeln()
+      ..writeln('User request: $userRequest')
+      ..write(
+          'Respond with ONLY the A2UI messages described above — no prose.');
+    return prompt.toString();
+  }
+
+  /// Stream the response into a live preview transport while the model
+  /// writes, so users see something in seconds instead of tens of seconds.
+  /// The caller then runs the normal repaired [render], which replaces the
+  /// (unrepaired) preview.
+  Future<String> _generateStreaming(
+      LlmStreamRunner runner, String prompt) async {
+    final buffer = StringBuffer();
+    _freshConversation();
+    setState(() => _error = null);
+    try {
+      await for (final chunk
+          in runner.streamGenerate(prompt, options: widget.generateOptions)) {
+        buffer.write(chunk);
+        _adapter.addChunk(chunk);
+        widget.onChunk?.call(chunk);
+      }
+      await _adapter.flush();
+    } catch (e) {
+      setState(() => _error = e);
+      widget.onError?.call(e);
+    }
+    return buffer.toString();
+  }
+
+  /// Tear down and rebuild the transport trio. The transport's flush()
+  /// closes its input stream — a fresh controller/adapter/conversation per
+  /// render is required, not optional.
+  void _freshConversation() {
+    _actions?.cancel();
     _actions = null;
     _convo.dispose();
     _adapter.dispose();
@@ -198,6 +290,11 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
     _adapter = A2uiTransportAdapter();
     _convo = Conversation(controller: _controller, transport: _adapter);
     _listenForActions();
+  }
+
+  /// Repair and render [raw] model output, replacing whatever was shown.
+  Future<void> render(String raw) async {
+    _freshConversation();
     // Clear the error only after the new conversation is wired up: the build
     // triggered from here (e.g. via didUpdateWidget) must observe the new
     // conversation's state, not re-read the disposed one.

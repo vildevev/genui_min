@@ -7,6 +7,14 @@
   failures (`onError`). Drive it with any `LlmRunner` via
   `GlobalKey<GenuiMinSurfaceState>.generate()`, or render raw text directly
   with `GenuiMinSurface(raw: ...)`.
+- **Streaming (`LlmStreamRunner`)** — a separate opt-in interface so one-shot
+  runners keep compiling. `GenuiMinSurface` detects it automatically and
+  streams the response into a live preview while the model writes
+  (`onChunk` per chunk); the repaired render replaces the preview.
+  `OllamaRunner.streamGenerate` implements it over Ollama's NDJSON streaming.
+- **Multi-turn** — each `generate()` folds previous requests and tapped
+  buttons into the prompt; `maxHistoryTurns` caps the transcript (default 8)
+  and `clearHistory()` resets it. First-turn prompts are unchanged.
 - **Opt-in catalog components.** `styledMinimalCatalog({extra: [styledRow]})`
   composes extra components by name; `catalogPromptTokens(catalog)` shows the
   system-prompt cost. A prompt-budget regression test pins the default

@@ -73,6 +73,18 @@ Already holding the model's raw text (e.g. replaying a cached response)?
 const GenuiMinSurface(raw: modelOutput)   // fences, prose and bugs welcome
 ```
 
+Two behaviors you get for free:
+
+- **Streaming.** If your runner also implements `LlmStreamRunner`
+  (`OllamaRunner` does), `generate()` streams tokens into a live preview
+  while the model writes — content appears in seconds instead of after a
+  2B model's full 10–30s response — then the repaired render replaces it.
+  `onChunk` fires per token batch if you want your own progress UI.
+- **Multi-turn.** Each `generate()` prompt folds in the previous requests
+  and tapped buttons, so "now add a streak stat" just works. Cap it with
+  `maxHistoryTurns` (default 8 — every entry spends the context budget) and
+  call `clearHistory()` to start over.
+
 Prefer to stay in control? The pipeline is fully exposed:
 
 ```dart
