@@ -65,3 +65,16 @@ abstract interface class LlmRunner {
   /// model bugs included — the repair pass cleans up after).
   Future<String> generate(String prompt, {LlmGenerateOptions? options});
 }
+
+/// A [LlmRunner] that can surface response tokens as they are produced.
+///
+/// Separate from [LlmRunner] so existing one-shot adapters keep compiling;
+/// a runner that streams should implement both. `GenuiMinSurface` detects
+/// this automatically: a streaming runner gives users a live preview while
+/// the model writes the A2UI (the big win on a 2B model that takes tens of
+/// seconds per response) — the final repaired render still replaces it.
+abstract interface class LlmStreamRunner {
+  /// Like [LlmRunner.generate], but emits response chunks as they arrive.
+  /// The concatenation of all chunks must equal the full response text.
+  Stream<String> streamGenerate(String prompt, {LlmGenerateOptions? options});
+}

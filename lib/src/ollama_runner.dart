@@ -17,7 +17,7 @@ import 'dart:io';
 import 'llm_runner.dart';
 
 /// An [LlmRunner] talking to a local Ollama daemon over its HTTP API.
-final class OllamaRunner implements LlmRunner {
+final class OllamaRunner implements LlmRunner, LlmStreamRunner {
   OllamaRunner({this.host = 'http://127.0.0.1:11434', required this.model});
 
   /// Base URL of the Ollama server, e.g. `http://127.0.0.1:11434`.
@@ -44,26 +44,9 @@ final class OllamaRunner implements LlmRunner {
 
   @override
   Future<String> generate(String prompt, {LlmGenerateOptions? options}) async {
-    final options_ = options ?? const LlmGenerateOptions();
-    final body = {
-      'model': model,
-      'prompt': prompt,
-      'stream': false,
-      if (options_.responseFormat is String || options_.responseFormat is Map)
-        'format': options_.responseFormat,
-      if (options_.disableThinking case final think?) 'think': !think,
-      'options': {
-        if (options_.temperature case final t?) 'temperature': t,
-        if (options_.topK case final k?) 'top_k': k,
-        if (options_.topP case final p?) 'top_p': p,
-        if (options_.maxTokens case final m?) 'num_predict': m,
-        if (options_.contextSize case final c?) 'num_ctx': c,
-      },
-    };
-
     final res = await _postJson(
       Uri.parse('$host/api/generate'),
-      body,
+      _requestBody(prompt, options, stream: false),
       host: host,
     );
     final text = res['response'];
@@ -75,6 +58,69 @@ final class OllamaRunner implements LlmRunner {
       );
     }
     return text;
+  }
+
+  @override
+  Stream<String> streamGenerate(
+    String prompt, {
+    LlmGenerateOptions? options,
+  }) async* {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10);
+    try {
+      final req = await client.postUrl(Uri.parse('$host/api/generate'));
+      req.headers.contentType = ContentType.json;
+      req.write(jsonEncode(_requestBody(prompt, options, stream: true)));
+      final res = await req.close().timeout(const Duration(minutes: 4));
+      if (res.statusCode != 200) {
+        final text = await res.transform(utf8.decoder).join();
+        final err = text.length > 300 ? '${text.substring(0, 300)}…' : text;
+        throw HttpException('Ollama at $host returned ${res.statusCode}: $err');
+      }
+      // Streaming responses are NDJSON: one {"response": "…", "done": …}
+      // object per line, ending with a final done:true line.
+      final lines = res.transform(utf8.decoder).transform(const LineSplitter());
+      await for (final line in lines) {
+        if (line.isEmpty) continue;
+        final obj = jsonDecode(line);
+        if (obj is! Map) continue;
+        final piece = obj['response'];
+        if (piece is String && piece.isNotEmpty) yield piece;
+        if (obj['done'] == true) break;
+      }
+    } on SocketException catch (e) {
+      throw SocketException(
+        'could not reach Ollama at $host — is `ollama serve` running?',
+        address: e.address,
+        port: e.port,
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Shared request body for one-shot and streaming calls.
+  Map<String, Object?> _requestBody(
+    String prompt,
+    LlmGenerateOptions? options, {
+    required bool stream,
+  }) {
+    final options_ = options ?? const LlmGenerateOptions();
+    return {
+      'model': model,
+      'prompt': prompt,
+      'stream': stream,
+      if (options_.responseFormat is String || options_.responseFormat is Map)
+        'format': options_.responseFormat,
+      if (options_.disableThinking case final think?) 'think': !think,
+      'options': {
+        if (options_.temperature case final t?) 'temperature': t,
+        if (options_.topK case final k?) 'top_k': k,
+        if (options_.topP case final p?) 'top_p': p,
+        if (options_.maxTokens case final m?) 'num_predict': m,
+        if (options_.contextSize case final c?) 'num_ctx': c,
+      },
+    };
   }
 }
 

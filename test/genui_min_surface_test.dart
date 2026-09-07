@@ -149,10 +149,127 @@ void main() {
       throwsA(isA<StateError>()),
     );
     expect(key.currentState!.isBusy, isTrue);
-    // Leave `first` deliberately in flight (the gate never opens): awaiting
-    // it would run the render/flush chain, which never completes under
-    // FakeAsync. The guard behavior is what's under test here.
   });
+
+  testWidgets('streaming runner assembles chunks and reports progress', (
+    tester,
+  ) async {
+    final key = GlobalKey<GenuiMinSurfaceState>();
+    final chunks = <String>[];
+    // The stream stays open after its chunks (the gate never completes), so
+    // the test ends while the generation is in flight: awaiting the full
+    // generate and pumping afterwards deadlocks the FakeAsync frame
+    // pipeline. Chunk assembly and callbacks are what's under test here;
+    // the final repaired render is covered by the raw-render tests.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GenuiMinSurface(
+            key: key,
+            runner: _GatedStreamRunner(),
+            onChunk: chunks.add,
+          ),
+        ),
+      ),
+    );
+
+    unawaited(key.currentState!.generate('a streaming card'));
+    // Chunks flow through microtasks (and the parser) — give the real event
+    // loop a window to deliver them; no pumping needed.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    expect(chunks, hasLength(greaterThan(1)));
+    expect(chunks.join(), _GatedStreamRunner.response);
+    expect(key.currentState!.isBusy, isTrue);
+    await expectLater(
+      () => key.currentState!.generate('two'),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  testWidgets('history feeds taps into the next prompt', (tester) async {
+    final key = GlobalKey<GenuiMinSurfaceState>();
+    final runner = _GatedRecordingRunner();
+    // Turn 1 renders through the raw path (harness-friendly): its button tap
+    // lands in the surface's history.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GenuiMinSurface(key: key, raw: _rawWithBug)),
+      ),
+    );
+    await _settle(tester);
+    await tester.tap(find.text('Go'));
+    await tester.pumpAndSettle();
+
+    // Swap in the gated recording runner (same GlobalKey → same state, same
+    // history) and ask for the next turn. The prompt is recorded
+    // synchronously when generate() is called; the generation then stays in
+    // flight for the rest of the test.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GenuiMinSurface(key: key, runner: runner)),
+      ),
+    );
+    unawaited(key.currentState!.generate('another card'));
+
+    expect(runner.prompts, hasLength(1));
+    expect(runner.prompts.single, contains('Conversation so far'));
+    expect(runner.prompts.single, contains('user tapped button "go"'));
+    expect(runner.prompts.single, contains('User request: another card'));
+  });
+}
+
+/// The full A2UI response, streamed in small chunks and then held open
+/// forever — the generation never completes.
+class _GatedStreamRunner implements LlmRunner, LlmStreamRunner {
+  static const response = '''
+```json
+{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
+{"id":"root","component":"Text","text":"Streamed"}]}}
+```
+''';
+
+  @override
+  String get name => 'gated-stream';
+
+  @override
+  Future<String> generate(
+    String prompt, {
+    LlmGenerateOptions? options,
+  }) async =>
+      response;
+
+  @override
+  Stream<String> streamGenerate(
+    String prompt, {
+    LlmGenerateOptions? options,
+  }) async* {
+    for (var i = 0; i < response.length; i += 12) {
+      yield response.substring(i, (i + 12).clamp(0, response.length));
+    }
+    // Hold the stream open: completing it would run the render/flush chain,
+    // which cannot be awaited under FakeAsync (see the busy-guard test).
+    await Completer<void>().future;
+  }
+}
+
+/// A runner that records every prompt synchronously, then never answers.
+class _GatedRecordingRunner implements LlmRunner {
+  final prompts = <String>[];
+
+  @override
+  String get name => 'gated-recording';
+
+  @override
+  Future<String> generate(
+    String prompt, {
+    LlmGenerateOptions? options,
+  }) async {
+    prompts.add(prompt);
+    await Completer<void>().future;
+    return '';
+  }
 }
 
 /// A runner whose future is held open by [gate] so a generation can be
