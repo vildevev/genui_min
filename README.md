@@ -2,7 +2,7 @@
 
 > **Generative UI on a phone — offline, from a 2-billion-parameter model.**
 
-Most "AI builds your interface" demos quietly call GPT-4 in the cloud. `genui_min` does it with a small model running **entirely on-device**: the model emits [A2UI](https://a2ui.org), and Google's [`genui`](https://pub.dev/packages/genui) renders it into real, themed Flutter widgets. No server. No API key. No network.
+Most "AI builds your interface" demos quietly call GPT-4 in the cloud. `genui_min` does it with a small model running **entirely on-device**: the model emits [A2UI](https://a2ui.org), and the A2UI Flutter renderer, [`a2ui_flutter`](https://pub.dev/packages/a2ui_flutter), renders it into real, themed Flutter widgets. No server. No API key. No network.
 
 ✨ **Proven on Gemma 4 E2B, on an iPhone, in airplane mode.**
 
@@ -31,22 +31,22 @@ budget notes, screenshots, and the small-model failure modes covered by tests.
 
 ## Why this isn't trivial
 
-genui is excellent, but its full `BasicCatalog` (18 widgets) produces a **~19,000-token system prompt**. A 2–4B model on a phone can't fit that *and* leave room to answer. So on-device generative UI "doesn't work"… until you change two things:
+The full A2UI basic catalog (18 widgets) produces a **~9,750-token system prompt**. A 2–4B model on a phone can't fit that *and* leave room to answer. So on-device generative UI "doesn't work"… until you change two things:
 
 | | full `BasicCatalog` | **`genui_min`** |
 |---|---|---|
 | widgets | 18 | 5 |
-| system prompt | ~19,350 tokens | **~4,700 tokens** |
+| system prompt | ~9,750 tokens | **~2,700 tokens** |
 | fits a 2–4B model @ 8k ctx | ❌ | ✅ |
 
-- 🪶 **A minimal, *styled* catalog** — `Text · Card · Button · Column · Stat` with polished, theme-aware renderers (centered pill button, padded rounded card, big-number metric). The prompt shrinks ~4×; the model can actually work.
+- 🪶 **A minimal, *styled* catalog** — `Text · Card · Button · Column · Stat` with polished, theme-aware renderers (centered pill button, padded rounded card, big-number metric). The prompt shrinks ~3.6×; the model can actually work.
 - 🩹 **A deterministic repair pass** — small models reliably make a few A2UI mistakes (reusing a node, forgetting a button label, skipping `createSurface`). `genui_min` fixes them *before* rendering, so output is robust across prompts — not just the lucky one.
 
 ---
 
 ## Quick start
 
-The fastest path is `GenuiMinSurface` — one widget that does repair, transport
+The fastest path is `GenuiMinSurface` — one widget that does repair, renderer
 lifecycle, and rendering for you:
 
 ```dart
@@ -88,7 +88,8 @@ Two behaviors you get for free:
 Prefer to stay in control? The pipeline is fully exposed:
 
 ```dart
-import 'package:genui/genui.dart';
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:genui_min/genui_min.dart';
 
 // 1. Build the catalog + system prompt.
@@ -103,10 +104,15 @@ final raw = await yourModel.generate(
 
 // 3. Repair the raw output (and inject createSurface if the model skipped it).
 final clean = repairRawResponse(raw,
-    surfaceId: 'main', catalogId: catalog.catalogId!);
+    surfaceId: 'main', catalogId: catalog.id);
 
-// 4. Feed `clean` to a FRESH genui transport each turn, then render with
-//    genui's `Surface` widget. (See gotcha #1.)
+// 4. Feed the repaired messages to a FRESH processor each turn, then render
+//    the surface with `A2uiSurface`. (See gotcha #1.)
+final processor = MessageProcessor<ComponentImplementation>(
+  catalogs: [catalog],
+);
+processor.processMessages(extractJsonObjects(clean));
+final rendered = A2uiSurface(surface: processor.model.getSurface('main')!);
 ```
 
 Full working app in [`example/`](example/) — three interchangeable backends
@@ -128,13 +134,13 @@ For a tighter runtime integration checklist, see
 ## How it works
 
 ### The catalog is the prompt-size dial
-genui builds the system prompt from the JSON schema of **every** widget in the catalog. Fewer widgets → a dramatically smaller prompt. A handful of components (`Text · Card · Button · Column · Stat`) cover most "card + actions" UIs. `styledMinimalCatalog()` keeps the same A2UI component names and schemas as the basic catalog — so the prompt format is standard — but ships **custom renderers** so the result looks good out of the box.
+`a2ui_agent` builds the system prompt from the JSON schema of **every** widget in the catalog. Fewer widgets → a dramatically smaller prompt. A handful of components (`Text · Card · Button · Column · Stat`) cover most "card + actions" UIs. `styledMinimalCatalog()` keeps the same A2UI component names and schemas as the basic catalog — so the prompt format is standard — but ships **custom renderers** so the result looks good out of the box.
 
 Need more? Compose opt-in components into the catalog — `Row` ships today:
 
 ```dart
 final catalog = styledMinimalCatalog(extra: [styledRow]);
-print(catalogPromptTokens(catalog)); // 5,329 — vs 4,680 for the default five
+print(catalogPromptTokens(catalog)); // 2,813 — vs 2,684 for the default five
 ```
 
 Every extra widens what the model can build **and** spends context; check the
@@ -170,7 +176,7 @@ cd gallery && flutter pub get && flutter run    # or: flutter build web
 ```
 
 ### Three gotchas (learned the hard way)
-1. **Rebuild the genui transport every turn.** `A2uiTransportAdapter.flush()` permanently *closes* its input stream — reuse throws `Bad state: Cannot add event after closing`. Make a fresh `SurfaceController` + `A2uiTransportAdapter` + `Conversation` per generation.
+1. **Use a fresh renderer every turn.** Each turn's repaired output creates the surface again, and `MessageProcessor` rejects a second `createSurface` for a surface it already holds. Make a fresh `MessageProcessor` per generation (`GenuiMinSurface` does this for you).
 2. **The app creates the surface; the model just fills it.** Small models reliably emit `updateComponents` but skip the `createSurface` bootstrap — `repairRawResponse` injects it for you.
 3. **Pick the model for memory, not just quality.** A bigger context = a bigger KV cache. On an 8 GB iPhone, **Gemma 4 E2B (2.6 GB)** runs comfortably at 8k context; **E4B (3.7 GB)** OOMs during KV-cache allocation. The smaller model is the headroom the larger context needs.
 
@@ -181,11 +187,12 @@ cd gallery && flutter pub get && flutter run    # or: flutter build web
 ```yaml
 dependencies:
   genui_min: ^0.3.0
-  genui: ^0.9.0
+  a2ui_core: ^0.6.0
+  a2ui_flutter: ^0.2.0
 ```
 
 `genui_min` is renderer-only — **bring your own on-device LLM** (e.g. [`flutter_gemma`](https://pub.dev/packages/flutter_gemma)). On iOS, large-model inference needs the `com.apple.developer.kernel.increased-memory-limit` entitlement (a paid Apple Developer account).
 
 ## Acknowledgements
 
-Built on [`genui`](https://pub.dev/packages/genui) (© The Flutter Authors, BSD-3-Clause) and the [A2UI](https://a2ui.org) protocol. MIT licensed.
+Built on the A2UI Dart SDKs ([`a2ui_core`](https://pub.dev/packages/a2ui_core), [`a2ui_flutter`](https://pub.dev/packages/a2ui_flutter) and [`a2ui_agent`](https://pub.dev/packages/a2ui_agent), Apache-2.0) and the [A2UI](https://a2ui.org) protocol, and first built on [`genui`](https://pub.dev/packages/genui) (© The Flutter Authors, BSD-3-Clause). MIT licensed.

@@ -34,7 +34,7 @@ final raw = await runner.generate(
   ),
 );
 final clean = repairRawResponse(raw,
-    surfaceId: 'main', catalogId: catalog.catalogId!);  // safety net
+    surfaceId: 'main', catalogId: catalog.id);  // safety net
 ```
 
 **Verified live** (see `doc/proof.md` for the on-device story): qwen3:4b
@@ -81,6 +81,6 @@ bad ones), so the contract can't silently rot.
 - **Schemas constrain shape, not sense.** A model can still write a
   semantically odd tree (a Card whose child is a Button label, say). The
   system prompt's few-shot example is what teaches good trees.
-- `gbnfFromJsonSchema()` supports the JSON Schema subset genui emits
-  (objects, enums, arrays, `oneOf`) and falls back to permissive JSON for
+- `gbnfFromJsonSchema()` supports the JSON Schema subset the catalog emits
+  (objects, enums, arrays, `oneOf`, `anyOf`) and falls back to permissive JSON for
   anything unrecognized — generation never dead-ends.

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:a2ui_core/a2ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genui_min/genui_min.dart';
@@ -12,6 +13,25 @@ const _rawWithBug = '''
 {"id":"b","component":"Button","child":"l","action":{"event":{"name":"go","context":{}}}},
 {"id":"l","component":"Text","text":"Go"}
 ]}}
+```
+''';
+
+/// A response in the format the system prompt asks for: A2UI messages as a
+/// JSON array in `<a2ui-json>` tags.
+const _taggedResponse = '''
+<a2ui-json>
+[{"version":"v0.9","createSurface":{"surfaceId":"main","catalogId":"https://a2ui.org/specification/v0_9/basic_catalog.json"}},
+{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
+{"id":"root","component":"Text","text":"Previewed"}]}}]
+</a2ui-json>
+''';
+
+/// A `Text` whose `variant` is not one the catalog declares, which the
+/// renderer rejects.
+const _rawWithUnknownVariant = '''
+```json
+{"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
+{"id":"root","component":"Text","text":"Hi","variant":"h1"}]}}
 ```
 ''';
 
@@ -188,6 +208,54 @@ void main() {
     );
   });
 
+  testWidgets('streaming runner shows A2UI blocks in a live preview', (
+    tester,
+  ) async {
+    final key = GlobalKey<GenuiMinSurfaceState>();
+    // As above, the stream stays open after its chunks, so what is on screen
+    // is the preview rather than the repaired render.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GenuiMinSurface(
+            key: key,
+            runner: _GatedStreamRunner(_taggedResponse),
+          ),
+        ),
+      ),
+    );
+
+    unawaited(key.currentState!.generate('a streaming card'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+
+    expect(find.text('Previewed'), findsOneWidget);
+    expect(key.currentState!.isBusy, isTrue);
+  });
+
+  testWidgets('a message the renderer rejects is reported through onError', (
+    tester,
+  ) async {
+    final errors = <Object>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GenuiMinSurface(
+            raw: _rawWithUnknownVariant,
+            onError: errors.add,
+          ),
+        ),
+      ),
+    );
+    await _settle(tester);
+
+    expect(errors.single, isA<A2uiValidationError>());
+    expect(find.textContaining('render error'), findsOneWidget);
+    expect(find.text('Hi'), findsNothing);
+  });
+
   testWidgets('history feeds taps into the next prompt', (tester) async {
     final key = GlobalKey<GenuiMinSurfaceState>();
     final runner = _GatedRecordingRunner();
@@ -223,12 +291,17 @@ void main() {
 /// The full A2UI response, streamed in small chunks and then held open
 /// forever — the generation never completes.
 class _GatedStreamRunner implements LlmRunner, LlmStreamRunner {
+  _GatedStreamRunner([this.text = response]);
+
   static const response = '''
 ```json
 {"version":"v0.9","updateComponents":{"surfaceId":"main","components":[
 {"id":"root","component":"Text","text":"Streamed"}]}}
 ```
 ''';
+
+  /// The response this runner streams.
+  final String text;
 
   @override
   String get name => 'gated-stream';
@@ -238,15 +311,15 @@ class _GatedStreamRunner implements LlmRunner, LlmStreamRunner {
     String prompt, {
     LlmGenerateOptions? options,
   }) async =>
-      response;
+      text;
 
   @override
   Stream<String> streamGenerate(
     String prompt, {
     LlmGenerateOptions? options,
   }) async* {
-    for (var i = 0; i < response.length; i += 12) {
-      yield response.substring(i, (i + 12).clamp(0, response.length));
+    for (var i = 0; i < text.length; i += 12) {
+      yield text.substring(i, (i + 12).clamp(0, text.length));
     }
     // Hold the stream open: completing it would run the render/flush chain,
     // which cannot be awaited under FakeAsync (see the busy-guard test).

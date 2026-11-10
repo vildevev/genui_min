@@ -1,7 +1,7 @@
 name: genui_min
 description: >-
   Generative UI from a small on-device LLM: one widget (GenuiMinSurface), a
-  minimal styled genui/A2UI component catalog whose system prompt fits a 2-4B
+  minimal styled A2UI component catalog whose system prompt fits a 2-4B
   model, and a deterministic repair pass for small-model output.
 version: 0.3.0
 repository: https://github.com/vildevev/genui_min
@@ -19,8 +19,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # The real Google generative-UI / A2UI renderer.
-  genui: ^0.9.0
+  # The A2UI Dart SDKs: protocol and message processing, the Flutter
+  # renderer, and the prompt for a model that writes A2UI itself.
+  a2ui_agent: ^0.2.0
+  a2ui_core: ^0.6.0
+  a2ui_flutter: ^0.2.0
   # Schema builder (S.*) used to declare the custom catalog item schemas.
   json_schema_builder: ^0.1.3
 

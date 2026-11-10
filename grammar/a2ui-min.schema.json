@@ -70,7 +70,7 @@
                   },
                   "child": {
                     "type": "string",
-                    "description": "The ID of a component."
+                    "description": "The unique identifier for a component."
                   }
                 },
                 "required": [
@@ -98,7 +98,8 @@
                     "description": "ID of the Text component used as the button label."
                   },
                   "action": {
-                    "oneOf": [
+                    "description": "An event or function call to execute.",
+                    "anyOf": [
                       {
                         "type": "object",
                         "properties": {
@@ -106,12 +107,10 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "type": "string",
-                                "description": "The name of the action to be dispatched to the server."
+                                "type": "string"
                               },
                               "context": {
                                 "type": "object",
-                                "description": "Arbitrary context data to send with the action.",
                                 "additionalProperties": true
                               }
                             },
@@ -129,6 +128,7 @@
                         "properties": {
                           "functionCall": {
                             "type": "object",
+                            "description": "Invokes a named function on the client.",
                             "properties": {
                               "call": {
                                 "type": "string",
@@ -136,8 +136,21 @@
                               },
                               "args": {
                                 "type": "object",
-                                "description": "Arguments to pass to the function.",
+                                "description": "Arguments passed to the function.",
                                 "additionalProperties": true
+                              },
+                              "returnType": {
+                                "type": "string",
+                                "description": "The expected return type of the function call.",
+                                "enum": [
+                                  "string",
+                                  "number",
+                                  "boolean",
+                                  "array",
+                                  "object",
+                                  "any",
+                                  "void"
+                                ]
                               }
                             },
                             "required": [
@@ -183,12 +196,12 @@
                   },
                   "children": {
                     "description": "The list of child component IDs.",
-                    "oneOf": [
+                    "anyOf": [
                       {
                         "type": "array",
                         "items": {
                           "type": "string",
-                          "description": "Component ID"
+                          "description": "The unique identifier for a component."
                         }
                       },
                       {
@@ -196,11 +209,10 @@
                         "properties": {
                           "componentId": {
                             "type": "string",
-                            "description": "The ID of a component."
+                            "description": "The unique identifier for a component."
                           },
                           "path": {
-                            "type": "string",
-                            "description": "A relative or absolute path in the data model."
+                            "type": "string"
                           }
                         },
                         "required": [

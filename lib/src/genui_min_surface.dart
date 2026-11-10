@@ -1,19 +1,20 @@
 // The five-line integration: one widget that absorbs every "gotcha" from the
 // docs. Render raw model output directly (`raw:`), or hand it an `LlmRunner`
-// and drive it with `generate()` via a GlobalKey. It rebuilds the genui
-// transport per turn (flush() closes the stream), injects/repairs via
-// `repairRawResponse`, renders through a real Surface, and reports button
-// taps (`onAction`), streamed chunks (`onChunk`), repairs (`onRepair`), and
-// failures (`onError`). Runners that also implement `LlmStreamRunner` get a
-// live preview while the model writes; past requests and taps feed the next
-// prompt (multi-turn).
+// and drive it with `generate()` via a GlobalKey. It rebuilds the A2UI
+// message processor per turn (each turn creates the surface again),
+// injects/repairs via `repairRawResponse`, renders through a real
+// A2uiSurface, and reports button taps (`onAction`), streamed chunks
+// (`onChunk`), repairs (`onRepair`), and failures (`onError`). Runners that
+// also implement `LlmStreamRunner` get a live preview while the model writes;
+// past requests and taps feed the next prompt (multi-turn).
 
-import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:a2ui_agent/a2ui_agent.dart';
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:genui/genui.dart';
 
 import 'llm_runner.dart';
 import 'styled_catalog.dart';
@@ -74,7 +75,7 @@ class GenuiMinSurface extends StatefulWidget {
 
   /// Catalog to render with (and build the prompt from). Defaults to
   /// [styledMinimalCatalog].
-  final Catalog? catalog;
+  final CatalogImplementation? catalog;
 
   /// A2UI surface id. One surface per widget; defaults to 'main'.
   final String surfaceId;
@@ -84,7 +85,7 @@ class GenuiMinSurface extends StatefulWidget {
 
   /// A Button inside the generated UI was tapped. Fires once per tap with
   /// the event the model attached to that button.
-  final void Function(UserActionEvent action)? onAction;
+  final void Function(A2uiRendererAction action)? onAction;
 
   /// A chunk of the model's response arrived while streaming (the runner
   /// implements [LlmStreamRunner]). Fires during [generate], before the
@@ -116,15 +117,15 @@ class GenuiMinSurface extends StatefulWidget {
 }
 
 class GenuiMinSurfaceState extends State<GenuiMinSurface> {
-  late final Catalog _catalog = widget.catalog ?? styledMinimalCatalog();
+  late final CatalogImplementation _catalog =
+      widget.catalog ?? styledMinimalCatalog();
 
-  late SurfaceController _controller = SurfaceController(catalogs: [_catalog]);
-  late A2uiTransportAdapter _adapter = A2uiTransportAdapter();
-  late Conversation _convo = Conversation(
-    controller: _controller,
-    transport: _adapter,
-  );
-  StreamSubscription<ChatMessage>? _actions;
+  late MessageProcessor<ComponentImplementation> _processor = _newProcessor();
+  List<Subscription> _subscriptions = const [];
+
+  /// The surfaces [_processor] holds, in the order they were created.
+  final _surfaces =
+      ValueNotifier<List<SurfaceModel<ComponentImplementation>>>(const []);
   Object? _error;
   var _busy = false;
 
@@ -134,7 +135,7 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
   @override
   void initState() {
     super.initState();
-    _listenForActions();
+    _listen();
     final raw = widget.raw;
     if (raw != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => render(raw));
@@ -149,33 +150,33 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
     }
   }
 
-  void _listenForActions() {
-    // Button taps come back as ChatMessages carrying a UiInteractionPart;
-    // unwrap the UserActionEvent map for the app.
-    _actions = _controller.onSubmit.listen((message) {
-      for (final part in message.parts.uiInteractionParts) {
-        try {
-          final payload = jsonDecode(part.interaction);
-          final action = payload is Map ? payload['action'] : null;
-          if (action is! Map) continue;
-          final context = action['context'] is Map
-              ? Map<String, Object?>.from(action['context'] as Map)
-              : <String, Object?>{};
-          widget.onAction?.call(
-            UserActionEvent(
-              surfaceId: action['surfaceId'] as String?,
-              name: (action['name'] ?? '').toString(),
-              sourceComponentId: (action['sourceComponentId'] ?? '').toString(),
-              context: context,
-            ),
-          );
-          _remember('user tapped button "${(action['name'] ?? '').toString()}"'
-              '${context.isEmpty ? '' : ' with ${jsonEncode(context)}'}');
-        } catch (_) {
-          // A malformed interaction part should never break the surface.
-        }
-      }
-    });
+  MessageProcessor<ComponentImplementation> _newProcessor() => MessageProcessor(
+        catalogs: [_catalog],
+        // The streamed preview arrives in pieces, which the strict checks
+        // would reject.
+        validationConfig: ValidationConfig.relaxed,
+      );
+
+  /// Track [_processor]'s surfaces, and hand button taps to the app.
+  void _listen() {
+    _surfaces.value = const [];
+    _subscriptions = [
+      _processor.model.onSurfaceCreated.subscribe((surface) {
+        _surfaces.value = [..._surfaces.value, surface];
+      }),
+      _processor.model.onSurfaceDeleted.subscribe((surfaceId) {
+        _surfaces.value = [
+          for (final surface in _surfaces.value)
+            if (surface.id != surfaceId) surface,
+        ];
+      }),
+      _processor.model.onAction.subscribe((action) {
+        widget.onAction?.call(action);
+        final context = action.context;
+        _remember('user tapped button "${action.name}"'
+            '${context.isEmpty ? '' : ' with ${jsonEncode(context)}'}');
+      }),
+    ];
   }
 
   /// Append to the transcript, dropping the oldest turns past
@@ -253,63 +254,92 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
     return prompt.toString();
   }
 
-  /// Stream the response into a live preview transport while the model
-  /// writes, so users see something in seconds instead of tens of seconds.
-  /// The caller then runs the normal repaired [render], which replaces the
-  /// (unrepaired) preview.
+  /// Stream the response into a live preview while the model writes, so
+  /// users see something in seconds instead of tens of seconds. The caller
+  /// then runs the normal repaired [render], which replaces the (unrepaired)
+  /// preview.
   Future<String> _generateStreaming(
       LlmStreamRunner runner, String prompt) async {
     final buffer = StringBuffer();
-    _freshConversation();
+    _freshProcessor();
     setState(() => _error = null);
+    // The preview reads the A2UI blocks the model writes and applies each one
+    // it accepts to the processor; a block it rejects is skipped.
+    final previewState = RendererState.of(_processor);
+    final preview = _previewAgent().openContinuingStream(state: previewState);
+    var previewing = true;
+    void showPreview(void Function() read) {
+      if (!previewing) return;
+      try {
+        read();
+      } on A2uiError {
+        // The preview has ended; the repaired render follows.
+        previewing = false;
+      }
+    }
+
     try {
       await for (final chunk
           in runner.streamGenerate(prompt, options: widget.generateOptions)) {
         buffer.write(chunk);
-        _adapter.addChunk(chunk);
+        showPreview(() => preview.feed(chunk));
         widget.onChunk?.call(chunk);
       }
-      await _adapter.flush();
+      showPreview(preview.close);
     } catch (e) {
       setState(() => _error = e);
       widget.onError?.call(e);
+    } finally {
+      previewState.dispose();
     }
     return buffer.toString();
   }
 
-  /// Tear down and rebuild the transport trio. The transport's flush()
-  /// closes its input stream — a fresh controller/adapter/conversation per
-  /// render is required, not optional.
-  void _freshConversation() {
-    _actions?.cancel();
-    _actions = null;
-    _convo.dispose();
-    _adapter.dispose();
-    _controller.dispose();
-    _controller = SurfaceController(catalogs: [_catalog]);
-    _adapter = A2uiTransportAdapter();
-    _convo = Conversation(controller: _controller, transport: _adapter);
-    _listenForActions();
+  /// Reads the A2UI blocks of a streamed response for the preview, in the
+  /// format [minimalSystemPrompt] asks for.
+  A2uiRequestProcessor _previewAgent() => A2uiGenerator(
+        catalogs: [CatalogConfig(_catalog)],
+        inferenceFormatFactory: const DirectJsonFormatFactory(
+          allowedMessages: ['createSurface', 'updateComponents'],
+          bufferIncompleteComponents: true,
+        ),
+      ).createProcessor(
+        A2uiRendererCapabilities.forCatalogIds(
+          [_catalog.id],
+          version: A2uiProtocolVersion.v0_9,
+        ),
+      );
+
+  /// Tear down and rebuild the message processor. Each render creates its
+  /// surface again, and a second `createSurface` for a surface that exists is
+  /// an error — a fresh processor per render is required, not optional.
+  void _freshProcessor() {
+    for (final subscription in _subscriptions) {
+      subscription.unsubscribe();
+    }
+    _processor.dispose();
+    _processor = _newProcessor();
+    _listen();
   }
 
   /// Repair and render [raw] model output, replacing whatever was shown.
   Future<void> render(String raw) async {
-    _freshConversation();
-    // Clear the error only after the new conversation is wired up: the build
+    _freshProcessor();
+    // Clear the error only after the new processor is wired up: the build
     // triggered from here (e.g. via didUpdateWidget) must observe the new
-    // conversation's state, not re-read the disposed one.
+    // processor's surfaces, not re-read the disposed ones.
     setState(() => _error = null);
     try {
       final log = RepairLog();
       final clean = repairRawResponse(
         raw,
         surfaceId: widget.surfaceId,
-        catalogId: _catalog.catalogId!,
+        catalogId: _catalog.id,
         log: log,
       );
       widget.onRepair?.call(log);
-      _adapter.addChunk(clean);
-      await _adapter.flush();
+      // Throws an A2uiError for a message the renderer rejects.
+      _processor.processMessages(extractJsonObjects(clean));
     } catch (e) {
       setState(() => _error = e);
       widget.onError?.call(e);
@@ -318,10 +348,11 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
 
   @override
   void dispose() {
-    _actions?.cancel();
-    _convo.dispose();
-    _adapter.dispose();
-    _controller.dispose();
+    for (final subscription in _subscriptions) {
+      subscription.unsubscribe();
+    }
+    _processor.dispose();
+    _surfaces.dispose();
     super.dispose();
   }
 
@@ -329,10 +360,10 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
   Widget build(BuildContext context) {
     return Padding(
       padding: widget.padding,
-      child: ValueListenableBuilder<ConversationState>(
-        valueListenable: _convo.state,
-        builder: (context, state, _) {
-          final surfaces = state.surfaces.toList();
+      child:
+          ValueListenableBuilder<List<SurfaceModel<ComponentImplementation>>>(
+        valueListenable: _surfaces,
+        builder: (context, surfaces, _) {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -346,8 +377,8 @@ class GenuiMinSurfaceState extends State<GenuiMinSurface> {
                     fontSize: 12,
                   ),
                 ),
-              for (final id in surfaces)
-                Surface(surfaceContext: _controller.contextFor(id)),
+              for (final surface in surfaces)
+                A2uiSurface(key: ObjectKey(surface), surface: surface),
               if (_error == null && surfaces.isEmpty)
                 widget.emptyPlaceholder ?? const SizedBox.shrink(),
             ],

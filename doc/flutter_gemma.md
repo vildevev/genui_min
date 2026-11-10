@@ -21,25 +21,23 @@ final raw = await model.generate(prompt);
 final clean = repairRawResponse(
   raw,
   surfaceId: 'main',
-  catalogId: catalog.catalogId!,
+  catalogId: catalog.id,
 );
 
-final controller = SurfaceController(catalogs: [catalog]);
-final adapter = A2uiTransportAdapter();
-final conversation = Conversation(
-  controller: controller,
-  transport: adapter,
+final processor = MessageProcessor<ComponentImplementation>(
+  catalogs: [catalog],
 );
+processor.processMessages(extractJsonObjects(clean));
 
-adapter.addChunk(clean);
-await adapter.flush();
+// Render it with A2uiSurface(surface: processor.model.getSurface('main')!).
 ```
 
 ## Important Runtime Notes
 
 - Create the surface in app code and let the model fill it.
-- Use a fresh `SurfaceController`, `A2uiTransportAdapter`, and `Conversation`
-  for each generation. `flush()` closes the adapter stream.
+- Use a fresh `MessageProcessor` for each generation. Each generation creates
+  the surface again, and a second `createSurface` for the same surface is an
+  error.
 - Keep temperature moderate. The catalog is small enough that you do not need to
   force the model into brittle, ultra-low-temperature output.
 - Prefer a model/context pair that leaves memory headroom. On-device generative

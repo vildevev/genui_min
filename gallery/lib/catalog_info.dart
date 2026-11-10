@@ -2,7 +2,7 @@
 // is, which props it takes (straight from the live schema — this file never
 // duplicates it by hand), and the raw JSON that renders each variant.
 
-import 'package:genui/genui.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:genui_min/genui_min.dart';
 
 /// One named variant of a component, as raw A2UI the preview can render.
@@ -28,10 +28,10 @@ final class ComponentInfo {
   final List<ComponentProp> props;
 
   static ComponentInfo fromItem(
-    CatalogItem item,
+    ComponentImplementation item,
     List<ComponentVariant> variants,
   ) {
-    final schema = item.dataSchema.value;
+    final schema = item.schema.value;
     final description = (schema['description'] as String?) ?? '';
     final required = (schema['required'] as List?)?.cast<String>() ?? const [];
     final properties = schema['properties'] as Map? ?? {};
@@ -67,8 +67,8 @@ String _msg(String componentsJson) =>
 /// The gallery's component library — one entry per minimal-catalog widget,
 /// variants included, driven by the same [styledMinimalCatalog] the model
 /// prompt is built from.
-List<ComponentInfo> componentLibrary(Catalog catalog) {
-  final byName = {for (final item in catalog.items) item.name: item};
+List<ComponentInfo> componentLibrary(CatalogImplementation catalog) {
+  final byName = catalog.components;
 
   ComponentInfo info(String name, List<ComponentVariant> variants) =>
       ComponentInfo.fromItem(byName[name]!, variants);

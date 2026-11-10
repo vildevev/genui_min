@@ -1,3 +1,42 @@
+## Unreleased
+
+- **Breaking: moves from `genui` to the A2UI Dart SDKs.** genui_min now
+  depends on `a2ui_core`, `a2ui_flutter` and `a2ui_agent` instead of
+  `genui` 0.9, and still speaks A2UI v0.9.
+  - `styledText`, `styledCard`, `styledButton`, `styledColumn`, `styledStat`
+    and `styledRow` are `a2ui_flutter` `ComponentImplementation`s instead of
+    genui `CatalogItem`s. `styledMinimalCatalog` takes them in `extra` and
+    returns a `CatalogImplementation`, whose id is `catalog.id` instead of
+    `catalog.catalogId!`. The default id is unchanged.
+  - `GenuiMinSurface.catalog` takes a `CatalogImplementation`, and `onAction`
+    receives an `a2ui_core` `A2uiRendererAction` (with the same `name`,
+    `surfaceId`, `sourceComponentId` and `context`) instead of a genui
+    `UserActionEvent`.
+  - `minimalSystemPrompt`, `catalogPromptTokens`,
+    `updateComponentsOutputSchema`, `updateComponentsOutputSchemaJson` and
+    `updateComponentsGbnf` take an `a2ui_core` `CatalogApi`, such as a
+    `CatalogImplementation`.
+  - The system prompt comes from `a2ui_agent`. It asks for A2UI messages as a
+    JSON array in `<a2ui-json>` tags instead of markdown-fenced JSON, and
+    carries the catalog's component rules and few-shot example inside the
+    catalog schema. genui's basic catalog rules are no longer part of it. The
+    default catalog's prompt is about 2,700 tokens (was about 4,700).
+  - To render `repairRawResponse` output yourself, decode it with
+    `extractJsonObjects` and pass the messages to a fresh `MessageProcessor`,
+    as the README shows.
+- The renderer checks each message against the catalog before applying it.
+  A message that fails, such as a `Text` with a `variant` the catalog does not
+  list, is not rendered and is reported through `GenuiMinSurface.onError`.
+  genui applied such a message and reported the failure separately.
+- The streaming preview shows the `<a2ui-json>` blocks the model writes, the
+  format the prompt now asks for. JSON in other wrappers appears with the
+  repaired render.
+- `grammar/` is regenerated. The action and child-list schemas now come from
+  A2UI's common types (`anyOf` instead of `oneOf`, and their descriptions),
+  and a function call may carry a `returnType`.
+- The example app and the gallery render with `MessageProcessor` and
+  `A2uiSurface`.
+
 ## 0.3.0
 
 - **`GenuiMinSurface`** — the five-line integration widget. Rebuilds the genui

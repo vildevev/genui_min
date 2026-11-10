@@ -3,10 +3,10 @@
 // Studio, …).
 //
 // The goal is not full JSON Schema coverage — it's a robust converter for the
-// schemas genui emits (objects, enums, arrays, oneOf discriminators), with a
-// permissive JSON-value fallback for anything unrecognized so generation never
-// dead-ends. Two documented limitations, deliberate to keep grammars small
-// and models unstuck:
+// schemas the catalog emits (objects, enums, arrays, oneOf discriminators),
+// with a permissive JSON-value fallback for anything unrecognized so
+// generation never dead-ends. Two documented limitations, deliberate to keep
+// grammars small and models unstuck:
 //
 //   * object properties are emitted in schema order (constrained decoding
 //     walks one path anyway; fixed order costs little),

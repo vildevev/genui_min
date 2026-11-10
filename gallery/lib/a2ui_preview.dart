@@ -1,10 +1,11 @@
 // Renders raw A2UI text through the REAL genui_min pipeline — repair pass
-// included — into a live Surface. This is not a hand-built mock of the
+// included — into a live A2uiSurface. This is not a hand-built mock of the
 // components: whatever you pass in goes through exactly what a model's output
 // would.
 
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:genui/genui.dart';
 import 'package:genui_min/genui_min.dart';
 
 class A2uiPreview extends StatefulWidget {
@@ -18,7 +19,7 @@ class A2uiPreview extends StatefulWidget {
 
   /// Raw A2UI text (fences/prose/bugs allowed — it gets repaired).
   final String raw;
-  final Catalog catalog;
+  final CatalogImplementation catalog;
   final double? height;
   final void Function(RepairLog log)? onLog;
 
@@ -27,13 +28,10 @@ class A2uiPreview extends StatefulWidget {
 }
 
 class _A2uiPreviewState extends State<A2uiPreview> {
-  late final SurfaceController _controller = SurfaceController(
+  late final MessageProcessor<ComponentImplementation> _processor =
+      MessageProcessor(
     catalogs: [widget.catalog],
-  );
-  late final A2uiTransportAdapter _adapter = A2uiTransportAdapter();
-  late final Conversation _convo = Conversation(
-    controller: _controller,
-    transport: _adapter,
+    validationConfig: ValidationConfig.relaxed,
   );
   String? _error;
 
@@ -45,16 +43,13 @@ class _A2uiPreviewState extends State<A2uiPreview> {
       final clean = repairRawResponse(
         widget.raw,
         surfaceId: 'main',
-        catalogId: widget.catalog.catalogId!,
+        catalogId: widget.catalog.id,
         log: log,
       );
       // Report after this frame so callers can setState safely.
       WidgetsBinding.instance
           .addPostFrameCallback((_) => widget.onLog?.call(log));
-      _adapter.addChunk(clean);
-      _adapter.flush().catchError((Object e) {
-        if (mounted) setState(() => _error = '$e');
-      });
+      _processor.processMessages(extractJsonObjects(clean));
     } catch (e) {
       _error = '$e';
     }
@@ -62,7 +57,7 @@ class _A2uiPreviewState extends State<A2uiPreview> {
 
   @override
   void dispose() {
-    _convo.dispose();
+    _processor.dispose();
     super.dispose();
   }
 
@@ -88,16 +83,12 @@ class _A2uiPreviewState extends State<A2uiPreview> {
       child: _error != null
           ? Text('render error: $_error',
               style: const TextStyle(color: Colors.redAccent, fontSize: 12))
-          : ValueListenableBuilder<ConversationState>(
-              valueListenable: _convo.state,
-              builder: (context, state, _) {
-                if (state.surfaces.isEmpty) {
-                  return const Center(
-                    child: Text('— nothing rendered —',
-                        style: TextStyle(fontSize: 12)),
-                  );
-                }
-                return LayoutBuilder(
+          : _processor.model.allSurfaces.isEmpty
+              ? const Center(
+                  child: Text('— nothing rendered —',
+                      style: TextStyle(fontSize: 12)),
+                )
+              : LayoutBuilder(
                   builder: (context, constraints) => SingleChildScrollView(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
@@ -107,18 +98,17 @@ class _A2uiPreviewState extends State<A2uiPreview> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            for (final id in state.surfaces)
-                              Surface(
-                                surfaceContext: _controller.contextFor(id),
+                            for (final surface in _processor.model.allSurfaces)
+                              A2uiSurface(
+                                key: ObjectKey(surface),
+                                surface: surface,
                               ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
     );
   }
 }

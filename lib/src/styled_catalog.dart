@@ -1,6 +1,6 @@
-// A minimal, *styled* genui catalog for small on-device LLMs.
+// A minimal, *styled* A2UI catalog for small on-device LLMs.
 //
-// genui's stock `BasicCatalogItems` render generic Material defaults (e.g. a
+// The stock basic catalog components render generic Material defaults (e.g. a
 // full-width, left-aligned button). This catalog ships custom widget builders
 // for the same A2UI component names (Text · Card · Button · Column) so the
 // generated UI looks polished and theme-aware out of the box — a pill button
@@ -11,14 +11,18 @@
 // Pair with `repairRawResponse` (a2ui_repair.dart) for robustness across the
 // small-model mistakes that prompting alone won't catch.
 
+import 'dart:async';
+
+import 'package:a2ui_agent/a2ui_agent.dart';
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:genui/genui.dart';
 import 'package:json_schema_builder/json_schema_builder.dart' as jsb;
 
 /// A `Text` block. `variant` is `title` (large/bold) or `body` (default).
-final CatalogItem styledText = CatalogItem(
+final ComponentImplementation styledText = ComponentImplementation(
   name: 'Text',
-  dataSchema: jsb.S.object(
+  schema: jsb.S.object(
     description: 'A block of text.',
     properties: {
       'text': jsb.S.string(description: 'The text content to display.'),
@@ -29,11 +33,10 @@ final CatalogItem styledText = CatalogItem(
     },
     required: ['text'],
   ),
-  widgetBuilder: (ctx) {
-    final data = ctx.data as JsonMap;
-    final text = (data['text'] ?? '').toString();
-    final isTitle = data['variant']?.toString() == 'title';
-    final theme = Theme.of(ctx.buildContext);
+  builder: (context, node, props, buildChild) {
+    final text = props.string('text') ?? '';
+    final isTitle = props.string('variant') == 'title';
+    final theme = Theme.of(context);
     // No color for body → inherits the ambient DefaultTextStyle (so a label
     // inside a Button picks up the button's foreground color automatically).
     final style = isTitle
@@ -49,17 +52,17 @@ final CatalogItem styledText = CatalogItem(
 );
 
 /// A `Card` — a padded, rounded, theme-aware container around one child.
-final CatalogItem styledCard = CatalogItem(
+final ComponentImplementation styledCard = ComponentImplementation(
   name: 'Card',
-  dataSchema: jsb.S.object(
+  schema: jsb.S.object(
     description: 'A visual container (card) that groups a single child widget.',
-    properties: {'child': A2uiSchemas.componentReference()},
+    properties: {'child': CommonSchemas.componentId},
     required: ['child'],
   ),
-  widgetBuilder: (ctx) {
-    final data = ctx.data as JsonMap;
-    final theme = Theme.of(ctx.buildContext);
-    final child = ctx.buildChild((data['child'] ?? '').toString());
+  builder: (context, node, props, buildChild) {
+    final theme = Theme.of(context);
+    final childNode = props.child('child');
+    final child = childNode == null ? null : buildChild(childNode);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -76,15 +79,16 @@ final CatalogItem styledCard = CatalogItem(
 );
 
 /// A `Button` — a centered pill button that dispatches its `action` event.
-final CatalogItem styledButton = CatalogItem(
+final ComponentImplementation styledButton = ComponentImplementation(
   name: 'Button',
-  dataSchema: jsb.S.object(
+  schema: jsb.S.object(
     description: 'An interactive button that triggers an action when pressed.',
     properties: {
-      'child': A2uiSchemas.componentReference(
-        description: 'ID of the Text component used as the button label.',
+      'child': _described(
+        CommonSchemas.componentId,
+        'ID of the Text component used as the button label.',
       ),
-      'action': A2uiSchemas.action(),
+      'action': CommonSchemas.action,
       'variant': jsb.S.string(
         description: 'Style hint.',
         enumValues: ['primary', 'borderless'],
@@ -92,11 +96,12 @@ final CatalogItem styledButton = CatalogItem(
     },
     required: ['child', 'action'],
   ),
-  widgetBuilder: (ctx) {
-    final data = ctx.data as JsonMap;
-    final label = ctx.buildChild((data['child'] ?? '').toString());
-    final borderless = data['variant']?.toString() == 'borderless';
-    void onPressed() => _dispatchAction(ctx, data['action']);
+  builder: (context, node, props, buildChild) {
+    final labelNode = props.child('child');
+    final label =
+        labelNode == null ? const SizedBox.shrink() : buildChild(labelNode);
+    final borderless = props.string('variant') == 'borderless';
+    void onPressed() => unawaited(props.action('action')?.call());
     return Align(
       child: Padding(
         padding: const EdgeInsets.only(top: 2),
@@ -121,13 +126,14 @@ final CatalogItem styledButton = CatalogItem(
 );
 
 /// A `Column` — vertical layout, centered cross-axis by default, with spacing.
-final CatalogItem styledColumn = CatalogItem(
+final ComponentImplementation styledColumn = ComponentImplementation(
   name: 'Column',
-  dataSchema: jsb.S.object(
+  schema: jsb.S.object(
     description: 'A layout widget that arranges its children vertically.',
     properties: {
-      'children': A2uiSchemas.componentArrayReference(
-        description: 'The list of child component IDs.',
+      'children': _described(
+        CommonSchemas.childList,
+        'The list of child component IDs.',
       ),
       'justify': jsb.S.string(
         description: 'Main-axis alignment.',
@@ -140,22 +146,18 @@ final CatalogItem styledColumn = CatalogItem(
     },
     required: ['children'],
   ),
-  widgetBuilder: (ctx) {
-    final data = ctx.data as JsonMap;
-    final childrenRaw = data['children'];
-    final ids = childrenRaw is List
-        ? childrenRaw.map((e) => e.toString()).toList()
-        : const <String>[];
-    final cross = switch (data['align']?.toString()) {
+  builder: (context, node, props, buildChild) {
+    final nodes = props.children('children');
+    final cross = switch (props.string('align')) {
       'start' => CrossAxisAlignment.start,
       'end' => CrossAxisAlignment.end,
       'stretch' => CrossAxisAlignment.stretch,
       _ => CrossAxisAlignment.center,
     };
     final children = <Widget>[];
-    for (var i = 0; i < ids.length; i++) {
+    for (var i = 0; i < nodes.length; i++) {
       if (i > 0) children.add(const SizedBox(height: 14));
-      children.add(ctx.buildChild(ids[i]));
+      children.add(buildChild(nodes[i]));
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -168,9 +170,9 @@ final CatalogItem styledColumn = CatalogItem(
 /// A `Stat` — a single metric readout: a large value, a caption label, and an
 /// optional delta chip (`trend` up = positive/green, down = negative, flat =
 /// neutral). Compose several inside a Column for a small dashboard.
-final CatalogItem styledStat = CatalogItem(
+final ComponentImplementation styledStat = ComponentImplementation(
   name: 'Stat',
-  dataSchema: jsb.S.object(
+  schema: jsb.S.object(
     description: 'A single metric readout: a large value, a short caption '
         'label, and an optional change indicator. Use this for any number or '
         'metric instead of a plain Text.',
@@ -191,15 +193,13 @@ final CatalogItem styledStat = CatalogItem(
     },
     required: ['value'],
   ),
-  widgetBuilder: (ctx) {
-    final data = ctx.data as JsonMap;
-    final value = (data['value'] ?? '').toString();
-    final label = data['label']?.toString();
-    final delta = data['delta']?.toString();
-    final theme = Theme.of(ctx.buildContext);
+  builder: (context, node, props, buildChild) {
+    final value = props.string('value') ?? '';
+    final label = props.string('label');
+    final delta = props.string('delta');
+    final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final (Color deltaColor, IconData? arrow) =
-        switch (data['trend']?.toString()) {
+    final (Color deltaColor, IconData? arrow) = switch (props.string('trend')) {
       'up' => (const Color(0xFF4CAF50), Icons.arrow_upward),
       'down' => (cs.error, Icons.arrow_downward),
       _ => (cs.onSurfaceVariant, null),
@@ -254,13 +254,14 @@ final CatalogItem styledStat = CatalogItem(
 /// A `Row` — horizontal layout with spacing, mirroring the basic catalog's
 /// Row schema so prompts stay standard. Compose into the catalog via
 /// [styledMinimalCatalog] `extra` when a screen needs side-by-side children.
-final CatalogItem styledRow = CatalogItem(
+final ComponentImplementation styledRow = ComponentImplementation(
   name: 'Row',
-  dataSchema: jsb.S.object(
+  schema: jsb.S.object(
     description: 'A layout widget that arranges its children horizontally.',
     properties: {
-      'children': A2uiSchemas.componentArrayReference(
-        description: 'The list of child component IDs.',
+      'children': _described(
+        CommonSchemas.childList,
+        'The list of child component IDs.',
       ),
       'justify': jsb.S.string(
         description: 'Main-axis alignment.',
@@ -280,13 +281,9 @@ final CatalogItem styledRow = CatalogItem(
     },
     required: ['children'],
   ),
-  widgetBuilder: (ctx) {
-    final data = ctx.data as JsonMap;
-    final childrenRaw = data['children'];
-    final ids = childrenRaw is List
-        ? childrenRaw.map((e) => e.toString()).toList()
-        : const <String>[];
-    final main = switch (data['justify']?.toString()) {
+  builder: (context, node, props, buildChild) {
+    final nodes = props.children('children');
+    final main = switch (props.string('justify')) {
       'start' => MainAxisAlignment.start,
       'center' => MainAxisAlignment.center,
       'end' => MainAxisAlignment.end,
@@ -295,16 +292,16 @@ final CatalogItem styledRow = CatalogItem(
       'spaceEvenly' => MainAxisAlignment.spaceEvenly,
       _ => MainAxisAlignment.start,
     };
-    final cross = switch (data['align']?.toString()) {
+    final cross = switch (props.string('align')) {
       'start' => CrossAxisAlignment.start,
       'end' => CrossAxisAlignment.end,
       'stretch' => CrossAxisAlignment.stretch,
       _ => CrossAxisAlignment.center,
     };
     final children = <Widget>[];
-    for (var i = 0; i < ids.length; i++) {
+    for (var i = 0; i < nodes.length; i++) {
       if (i > 0) children.add(const SizedBox(width: 10));
-      children.add(ctx.buildChild(ids[i]));
+      children.add(buildChild(nodes[i]));
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -315,20 +312,9 @@ final CatalogItem styledRow = CatalogItem(
   },
 );
 
-void _dispatchAction(CatalogItemContext ctx, Object? action) {
-  if (action is! Map) return;
-  final event = action['event'];
-  if (event is! Map) return;
-  ctx.dispatchEvent(
-    UserActionEvent(
-      name: (event['name'] ?? 'action').toString(),
-      sourceComponentId: ctx.id,
-      context: event['context'] is Map
-          ? Map<String, Object?>.from(event['context'] as Map)
-          : <String, Object?>{},
-    ),
-  );
-}
+/// [schema], a common A2UI type, with its own [description].
+jsb.Schema _described(jsb.Schema schema, String description) =>
+    jsb.Schema.fromMap({...schema.value, 'description': description});
 
 /// Concise A2UI rules + a worked few-shot example that keep small models on the
 /// rails (unique ids, button with its own label, one child per Card).
@@ -355,16 +341,22 @@ const String minimalFewShotExample =
     'Notice: `card_text` and `cta_label` are DIFFERENT components — the button '
     'never reuses the card\'s text.';
 
-/// Build the minimal styled catalog. [catalogId] defaults to the A2UI basic
-/// catalog id so it interops with the basic-catalog system prompt scaffolding.
+/// The id genui gave the A2UI v0.9 basic catalog, which the minimal catalog
+/// has always used by default.
+const String _defaultCatalogId =
+    'https://a2ui.org/specification/v0_9/basic_catalog.json';
+
+/// Build the minimal styled catalog. [catalogId] defaults to
+/// `https://a2ui.org/specification/v0_9/basic_catalog.json`, the A2UI v0.9
+/// basic catalog id that genui used.
 ///
 /// [extra] composes optional components (e.g. [styledRow]) into the catalog —
 /// by name, replacing the basic version if one exists. Every extra widens
 /// what the model can build *and* grows the system prompt; check the cost
 /// with [catalogPromptTokens] before shipping.
-Catalog styledMinimalCatalog({
+CatalogImplementation styledMinimalCatalog({
   String? catalogId,
-  List<CatalogItem> extra = const [],
+  List<ComponentImplementation> extra = const [],
 }) {
   final extrasByName = {for (final item in extra) item.name: item};
   final basics = [
@@ -374,25 +366,39 @@ Catalog styledMinimalCatalog({
     styledColumn,
     styledStat,
   ].where((item) => !extrasByName.containsKey(item.name));
-  return Catalog(
-    [...basics, ...extra],
-    functions: const [],
-    catalogId: catalogId ?? basicCatalogId,
-    systemPromptFragments: [
-      BasicCatalogItems.basicCatalogRules,
-      minimalComponentRules,
-      minimalFewShotExample,
-    ],
+  return CatalogImplementation(
+    id: catalogId ?? _defaultCatalogId,
+    components: [...basics, ...extra],
+    instructions: '$minimalComponentRules\n\n$minimalFewShotExample',
   );
 }
 
 /// The joined system prompt for a given catalog (chat / create-only mode).
-String minimalSystemPrompt(Catalog catalog) =>
-    PromptBuilder.chat(catalog: catalog).systemPromptJoined();
+///
+/// Built by `a2ui_agent` in its direct JSON format, which asks for A2UI JSON
+/// in `<a2ui-json>` tags. [catalog]'s `instructions` are part of it.
+String minimalSystemPrompt(CatalogApi catalog) {
+  final A2uiRequestProcessor agent = A2uiGenerator(
+    catalogs: [CatalogConfig(catalog)],
+    inferenceFormatFactory: const DirectJsonFormatFactory(
+      allowedMessages: ['createSurface', 'updateComponents'],
+    ),
+  ).createProcessor(
+    A2uiRendererCapabilities.forCatalogIds(
+      [catalog.id],
+      version: A2uiProtocolVersion.v0_9,
+    ),
+  );
+  return 'IMPORTANT: DO NOT update or modify surfaces created in previous '
+      'turns. If the UI needs to change, you MUST create a NEW surface with a '
+      'new unique `surfaceId`. You may only use `updateComponents` to '
+      'populate the components of a freshly created surface.\n\n'
+      '${agent.promptSnippet}';
+}
 
 /// Rough token cost of [catalog]'s system prompt (~4 chars/token heuristic —
 /// good enough to compare catalogs, not a billing figure). This is the
 /// prompt-size dial: every component you add spends from the small model's
 /// context here.
-int catalogPromptTokens(Catalog catalog) =>
+int catalogPromptTokens(CatalogApi catalog) =>
     minimalSystemPrompt(catalog).length ~/ 4;

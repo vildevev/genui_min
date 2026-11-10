@@ -7,8 +7,8 @@ import 'package:genui_min/genui_min.dart';
 
 void main() {
   test('default catalog stays under the small-model prompt budget', () {
-    // ~4,680 actual (chars/4 heuristic) vs ~19,350 for genui's full
-    // BasicCatalog. The ceiling is the contract, not the exact number:
+    // ~2,680 actual (chars/4 heuristic) vs ~9,750 for the full basic
+    // catalog. The ceiling is the contract, not the exact number:
     // small doc tweaks may move it, new components should fail this.
     expect(catalogPromptTokens(styledMinimalCatalog()), lessThan(5200));
   });
@@ -18,7 +18,7 @@ void main() {
     final withRow = catalogPromptTokens(
       styledMinimalCatalog(extra: [styledRow]),
     );
-    // Row is a compact schema (~650 tokens); keep additions in that class.
+    // Row is a compact schema (~130 tokens); keep additions in that class.
     expect(withRow - base, lessThan(1000));
     // And composition actually works — the extra renders through the same
     // pipeline (covered in the surface tests); here we just pin the dial.

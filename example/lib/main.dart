@@ -1,4 +1,4 @@
-// genui_min example — drive the real genui renderer with a small LLM.
+// genui_min example — drive the A2UI renderer with a small LLM.
 //
 // Three interchangeable backends, all behind the same LlmRunner interface:
 //   • "Sample"   — instantly renders a canned model response (which
@@ -15,9 +15,10 @@
 // After every render, the app shows WHICH repairs fired — the same telemetry
 // the bench corpus (tool/bench.dart) scores.
 
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:genui/genui.dart';
 import 'package:genui_min/genui_min.dart';
 import 'package:genui_min/ollama.dart';
 
@@ -108,13 +109,9 @@ class _DemoPageState extends State<DemoPage> {
   late final _systemPrompt = minimalSystemPrompt(_catalog);
   late final _schema = updateComponentsOutputSchema(_catalog);
 
-  // genui pipeline — rebuilt per render (flush() closes the adapter stream).
-  late SurfaceController _controller = SurfaceController(catalogs: [_catalog]);
-  late A2uiTransportAdapter _adapter = A2uiTransportAdapter();
-  late Conversation _convo = Conversation(
-    controller: _controller,
-    transport: _adapter,
-  );
+  // A2UI renderer — rebuilt per render (each render creates the surface
+  // again, and a second createSurface for it would be an error).
+  late MessageProcessor<ComponentImplementation> _processor = _newProcessor();
 
   final _input = TextEditingController(
     text: 'A card titled "Glow tip" with one short sentence and a button.',
@@ -133,13 +130,14 @@ class _DemoPageState extends State<DemoPage> {
   int _progress = 0;
   String _status = '';
 
+  MessageProcessor<ComponentImplementation> _newProcessor() => MessageProcessor(
+        catalogs: [_catalog],
+        validationConfig: ValidationConfig.relaxed,
+      );
+
   void _resetPipeline() {
-    try {
-      _convo.dispose();
-    } catch (_) {}
-    _controller = SurfaceController(catalogs: [_catalog]);
-    _adapter = A2uiTransportAdapter();
-    _convo = Conversation(controller: _controller, transport: _adapter);
+    _processor.dispose();
+    _processor = _newProcessor();
   }
 
   Future<void> _render(String raw) async {
@@ -155,11 +153,10 @@ class _DemoPageState extends State<DemoPage> {
       final clean = repairRawResponse(
         raw,
         surfaceId: 'main',
-        catalogId: _catalog.catalogId!,
+        catalogId: _catalog.id,
         log: log,
       );
-      _adapter.addChunk(clean);
-      await _adapter.flush();
+      _processor.processMessages(extractJsonObjects(clean));
       setState(() => _repairs = log.toString());
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -249,7 +246,7 @@ class _DemoPageState extends State<DemoPage> {
     _input.dispose();
     _ollamaHost.dispose();
     _ollamaModel.dispose();
-    _convo.dispose();
+    _processor.dispose();
     super.dispose();
   }
 
@@ -370,27 +367,23 @@ class _DemoPageState extends State<DemoPage> {
             const SizedBox(height: 20),
             const Text('RENDERED', style: _label),
             const SizedBox(height: 8),
-            ValueListenableBuilder<ConversationState>(
-              valueListenable: _convo.state,
-              builder: (context, state, _) {
-                if (state.surfaces.isEmpty) {
-                  return const Text('— nothing rendered yet —');
-                }
-                return Column(
-                  children: [
-                    for (final id in state.surfaces)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Surface(
-                            surfaceContext: _controller.contextFor(id),
-                          ),
+            if (_processor.model.allSurfaces.isEmpty)
+              const Text('— nothing rendered yet —')
+            else
+              Column(
+                children: [
+                  for (final surface in _processor.model.allSurfaces)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: A2uiSurface(
+                          key: ObjectKey(surface),
+                          surface: surface,
                         ),
                       ),
-                  ],
-                );
-              },
-            ),
+                    ),
+                ],
+              ),
             if (_repairs.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('repairs: $_repairs', style: _mono),

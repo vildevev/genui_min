@@ -3,7 +3,7 @@
 // Small models (e.g. Gemma 4 E2B) reliably emit *structurally* valid A2UI but
 // make a handful of recurring semantic mistakes. Rather than hope prompting
 // catches them all, we repair the parsed message before handing it to the
-// genui renderer — the same "be forgiving, never look broken" philosophy a
+// A2UI renderer — the same "be forgiving, never look broken" philosophy a
 // production generative-UI surface needs.
 //
 // Fixes applied (all idempotent):
@@ -496,8 +496,9 @@ Map<String, dynamic> repairUpdateComponents(
 }
 
 /// Full pipeline: take raw model text, return clean fenced A2UI JSON messages
-/// ready to feed a genui transport — a `createSurface` (injected if absent)
-/// followed by the repaired `updateComponents`.
+/// ready for an A2UI renderer — a `createSurface` (injected if absent)
+/// followed by the repaired `updateComponents`. [extractJsonObjects] decodes
+/// them for `MessageProcessor.processMessages`.
 String repairRawResponse(
   String raw, {
   required String surfaceId,

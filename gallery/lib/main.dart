@@ -1,7 +1,7 @@
 // genui_min gallery — the component library, visualized.
 //
 // Every widget in `styledMinimalCatalog()` rendered through the REAL pipeline
-// (A2UI JSON → repair pass → genui Surface), with the props and raw JSON that
+// (A2UI JSON → repair pass → A2uiSurface), with the props and raw JSON that
 // drive it, a live playground for pasting/editing A2UI (model optional —
 // break the JSON on purpose and watch the repair log), and composed examples.
 //
@@ -9,8 +9,8 @@
 
 import 'dart:convert';
 
+import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:genui/genui.dart';
 import 'package:genui_min/genui_min.dart';
 
 import 'a2ui_preview.dart';
@@ -75,7 +75,7 @@ class ComponentsTab extends StatelessWidget {
     required this.promptChars,
   });
 
-  final Catalog catalog;
+  final CatalogImplementation catalog;
   final int promptChars;
 
   @override
@@ -114,7 +114,7 @@ class _ComponentCard extends StatelessWidget {
   const _ComponentCard({required this.info, required this.catalog});
 
   final ComponentInfo info;
-  final Catalog catalog;
+  final CatalogImplementation catalog;
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +242,7 @@ class _PlaygroundTabState extends State<PlaygroundTab> {
       repairRawResponse(
         _input.text,
         surfaceId: 'main',
-        catalogId: _catalog.catalogId!,
+        catalogId: _catalog.id,
         log: log,
       );
       setState(() {
@@ -319,7 +319,7 @@ class _PlaygroundTabState extends State<PlaygroundTab> {
 class ExamplesTab extends StatelessWidget {
   const ExamplesTab({super.key, required this.catalog});
 
-  final Catalog catalog;
+  final CatalogImplementation catalog;
 
   @override
   Widget build(BuildContext context) {
